@@ -98,7 +98,9 @@ impl<'output, W: Write> ProcessingUnit<'output, W> {
     }
 
     fn load_program(&mut self, program: Program) {
-
+        for (i, byte) in program.bytes().enumerate() {
+            self.memory[i] = byte;
+        }
     }
 }
 
@@ -177,5 +179,33 @@ mod tests {
         pu.write_output(7).unwrap();
         let actual = String::from_utf8(buffer).unwrap();
         assert_eq!(&actual, "7\n");
+    }
+
+    #[test]
+    fn test_loading() {
+        let mut _buffer: Vec<u8> = vec![];
+
+        let mut pu = ProcessingUnit::new(&mut _buffer);
+
+        let source = [
+            "put 7 gr0",
+            "cp srA out"
+        ];
+        let source = source.join("\n");
+        let program = Program::try_compile(&source).unwrap();
+
+        pu.load_program(program);
+
+        // put 7 gr0
+        assert_eq!(pu.memory[0], 1);
+        assert_eq!(pu.memory[1], 7);
+        assert_eq!(pu.memory[2], 0);
+        assert_eq!(pu.memory[3], 0);
+
+        // cp srA out
+        assert_eq!(pu.memory[4], 3);
+        assert_eq!(pu.memory[5], 10);
+        assert_eq!(pu.memory[6], 8);
+        assert_eq!(pu.memory[7], 0);
     }
 }
