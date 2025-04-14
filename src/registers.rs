@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use anyhow::Result;
 use thiserror::Error;
 
@@ -25,10 +23,14 @@ pub enum ParseError {
     NoSuchRegister(String)
 }
 
-impl FromStr for Register {
-    type Err = ParseError;
+#[derive(Error, Debug)]
+pub enum DecodeError {
+    #[error("No register associated with numerical id {0}")]
+    NoSuchRegister(u8)
+}
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+impl Register {
+    pub fn try_from_str(s: &str) -> Result<Self> {
         match s {
             "gr0" => Ok(Register::gr0),
             "gr1" => Ok(Register::gr1),
@@ -41,21 +43,11 @@ impl FromStr for Register {
             "out" => Ok(Register::out),
             "pc"  => Ok(Register::pc),
             "srA" => Ok(Register::srA),
-            _ => Err(ParseError::NoSuchRegister(s.to_string()))
+            _ => Err(ParseError::NoSuchRegister(s.to_string()).into())
         }
     }
-}
 
-#[derive(Error, Debug)]
-pub enum DecodeError {
-    #[error("No register associated with numerical id {0}")]
-    NoSuchRegister(u8)
-}
-
-impl TryFrom<u8> for Register {
-    type Error = DecodeError;
-
-    fn try_from(x: u8) -> Result<Self, Self::Error> {
+    pub fn try_from_u8(x: u8) -> Result<Self> {
         match x {
             0 => Ok(Register::gr0),
             1 => Ok(Register::gr1),
@@ -68,14 +60,12 @@ impl TryFrom<u8> for Register {
             8 => Ok(Register::out),
             9 => Ok(Register::pc),
             10 => Ok(Register::srA),
-            _ => Err(DecodeError::NoSuchRegister(x))
+            _ => Err(DecodeError::NoSuchRegister(x).into())
         }
     }
-}
 
-impl From<Register> for u8 {
-    fn from(r: Register) -> Self {
-        match r {
+    pub fn as_u8(&self) -> u8 {
+        match self {
             Register::gr0 => 0,
             Register::gr1 => 1,
             Register::gr2 => 2,
@@ -111,7 +101,7 @@ mod tests {
             ("srA", Register::srA),
         ];
         for (text, expected) in pairs {
-            let actual: Register = text.parse().unwrap();
+            let actual: Register = Register::try_from_str(text).unwrap();
             assert_eq!(expected, actual);
         }
     }
@@ -132,7 +122,7 @@ mod tests {
             (10, Register::srA),
         ];
         for (byte, expected) in pairs {
-            let actual: Register = byte.try_into().unwrap();
+            let actual: Register = Register::try_from_u8(byte).unwrap();
             assert_eq!(expected, actual);
         }
     }
@@ -153,7 +143,7 @@ mod tests {
             (10, Register::srA),
         ];
         for (expected, register) in pairs {
-            let actual: u8 = register.into();
+            let actual: u8 = register.as_u8();
             assert_eq!(expected, actual);
         }
     }
