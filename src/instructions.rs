@@ -97,9 +97,9 @@ mod tests {
     fn parse_instructions() {
         let pairs = vec![
             ("hcf", Instruction::hcf),
-            ("put 7 gr0", Instruction::put(7, RegisterName::gr0)),
-            ("add gr0 gr1", Instruction::add(RegisterName::gr0, RegisterName::gr1)),
-            ("cp srA out", Instruction::cp(RegisterName::srA, RegisterName::out)),
+            ("put 7 gp0", Instruction::put(7, RegisterName::gp0)),
+            ("add gp0 gp1", Instruction::add(RegisterName::gp0, RegisterName::gp1)),
+            ("cp ans out", Instruction::cp(RegisterName::ans, RegisterName::out)),
         ];
         for (text, expected) in pairs {
             let actual = Instruction::try_from_str(text).unwrap();
@@ -109,30 +109,30 @@ mod tests {
 
     #[test]
     fn encode_instructions() {
-        let gr0 = RegisterName::gr0.as_u8();
-        let gr1 = RegisterName::gr1.as_u8();
-        let gr2 = RegisterName::gr2.as_u8();
-        let gr3 = RegisterName::gr3.as_u8();
+        let gp0 = RegisterName::gp0.as_u8();
+        let gp1 = RegisterName::gp1.as_u8();
+        let gp2 = RegisterName::gp2.as_u8();
+        let gp3 = RegisterName::gp3.as_u8();
         let out = RegisterName::out.as_u8();
 
         let pairs = vec![
             (Instruction::hcf, 0 as u32),
             (
-                Instruction::put(7, RegisterName::gr0),
+                Instruction::put(7, RegisterName::gp0),
                 u32::from_ne_bytes([
                     1,
                     7_u16.to_ne_bytes()[0],
                     7_u16.to_ne_bytes()[1],
-                    gr0
+                    gp0
                 ])
             ),
             (
-                Instruction::add(RegisterName::gr2, RegisterName::gr1),
-                u32::from_ne_bytes([2,gr2,gr1,0])
+                Instruction::add(RegisterName::gp2, RegisterName::gp1),
+                u32::from_ne_bytes([2,gp2,gp1,0])
             ),
             (
-                Instruction::cp(RegisterName::gr3, RegisterName::out),
-                u32::from_ne_bytes([3,gr3,out,0])
+                Instruction::cp(RegisterName::gp3, RegisterName::out),
+                u32::from_ne_bytes([3,gp3,out,0])
             )
         ];
         for (instr, expected) in pairs {
@@ -143,30 +143,30 @@ mod tests {
 
     #[test]
     fn decode_instructions() {
-        let gr0 = RegisterName::gr0.as_u8();
-        let gr1 = RegisterName::gr1.as_u8();
-        let gr2 = RegisterName::gr2.as_u8();
-        let gr3 = RegisterName::gr3.as_u8();
+        let gp0 = RegisterName::gp0.as_u8();
+        let gp1 = RegisterName::gp1.as_u8();
+        let gp2 = RegisterName::gp2.as_u8();
+        let gp3 = RegisterName::gp3.as_u8();
         let out = RegisterName::out.as_u8();
 
         let pairs = vec![
             (Instruction::hcf, 0 as u32),
             (
-                Instruction::put(7, RegisterName::gr0),
+                Instruction::put(7, RegisterName::gp0),
                 u32::from_ne_bytes([
                     1,
                     7_u16.to_ne_bytes()[0],
                     7_u16.to_ne_bytes()[1],
-                    gr0
+                    gp0
                 ])
             ),
             (
-                Instruction::add(RegisterName::gr2, RegisterName::gr1),
-                u32::from_ne_bytes([2,gr2,gr1,0])
+                Instruction::add(RegisterName::gp2, RegisterName::gp1),
+                u32::from_ne_bytes([2,gp2,gp1,0])
             ),
             (
-                Instruction::cp(RegisterName::gr3, RegisterName::out),
-                u32::from_ne_bytes([3,gr3,out,0])
+                Instruction::cp(RegisterName::gp3, RegisterName::out),
+                u32::from_ne_bytes([3,gp3,out,0])
             )
         ];
         for (expected, encoded) in pairs {

@@ -7,15 +7,15 @@ fn main() -> Result<()> {
     let mut pu = ybrpu::ProcessingUnit::new(&mut stdout);
 
     let source = [
-        "put 7 gr0",
-        "put 5 gr1",
-        "add gr1 gr0",
-        "cp srA out",
-        "add srA gr0",
-        "cp srA out",
-        "cp srA gr0",
-        "add gr0 gr0",
-        "cp srA out"
+        "put 7 gp0",
+        "put 5 gp1",
+        "add gp1 gp0",
+        "cp ans out",
+        "add ans gp0",
+        "cp ans out",
+        "cp ans gp0",
+        "add gp0 gp0",
+        "cp ans out"
     ];
     let source = source.join("\n");
 

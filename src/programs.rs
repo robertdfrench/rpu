@@ -70,10 +70,10 @@ mod tests {
     #[test]
     fn compile_valid_code() {
         let source = [
-            "put 7 gr0",
-            "put 5 gr1",
-            "add gr1 gr0",
-            "cp srA out"
+            "put 7 gp0",
+            "put 5 gp1",
+            "add gp1 gp0",
+            "cp ans out"
         ];
         let source = source.join("\n");
 
@@ -85,8 +85,8 @@ mod tests {
     #[test]
     fn test_iterator() {
         let source = [
-            "put 7 gr0",
-            "cp srA out"
+            "put 7 gp0",
+            "cp ans out"
         ];
         let source = source.join("\n");
         let program = Program::try_compile(&source).unwrap();
@@ -96,13 +96,13 @@ mod tests {
             results.push(byte);
         }
 
-        // put 7 gr0
+        // put 7 gp0
         assert_eq!(results[0], 1);
         assert_eq!(results[1], 7);
         assert_eq!(results[2], 0);
         assert_eq!(results[3], 0);
 
-        // cp srA out
+        // cp ans out
         assert_eq!(results[4], 3);
         assert_eq!(results[5], 10);
         assert_eq!(results[6], 8);

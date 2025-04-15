@@ -77,7 +77,7 @@ impl<'output, W: Write> ProcessingUnit<'output, W> {
     fn put(&mut self, val: u16, dst: RegisterName) -> Result<()> {
         match dst {
             RegisterName::pc => Err(ExecutionError::CannotPut(dst).into()),
-            RegisterName::srA => Err(ExecutionError::CannotPut(dst).into()), 
+            RegisterName::ans => Err(ExecutionError::CannotPut(dst).into()), 
             RegisterName::out => Err(ExecutionError::CannotPut(dst).into()),
             _ => {
                 self.register_file.write(dst, val);
@@ -101,7 +101,7 @@ impl<'output, W: Write> ProcessingUnit<'output, W> {
             _ => self.register_file.read(y)
         };
 
-        self.register_file.write(RegisterName::srA, x+y);
+        self.register_file.write(RegisterName::ans, x+y);
 
         Ok(())
     }
@@ -116,7 +116,7 @@ impl<'output, W: Write> ProcessingUnit<'output, W> {
 
         match dst {
             RegisterName::pc => Err(ExecutionError::CannotCpTo(dst).into()),
-            RegisterName::srA => Err(ExecutionError::CannotCpTo(dst).into()), 
+            RegisterName::ans => Err(ExecutionError::CannotCpTo(dst).into()), 
             RegisterName::out => {
                 self.write_output(val)?;
                 Ok(())
@@ -164,45 +164,45 @@ mod tests {
 
         let pu = ProcessingUnit::new(&mut _buffer);
 
-        let gr0 = pu.register_file.get(&RegisterName::gr0).unwrap();
-        assert_eq!(gr0.name, RegisterName::gr0);
-        assert_eq!(gr0.readable, true);
-        assert_eq!(gr0.writeable, true);
+        let gp0 = pu.register_file.get(&RegisterName::gp0).unwrap();
+        assert_eq!(gp0.name, RegisterName::gp0);
+        assert_eq!(gp0.readable, true);
+        assert_eq!(gp0.writeable, true);
 
-        let gr1 = pu.register_file.get(&RegisterName::gr1).unwrap();
-        assert_eq!(gr1.name, RegisterName::gr1);
-        assert_eq!(gr1.readable, true);
-        assert_eq!(gr1.writeable, true);
+        let gp1 = pu.register_file.get(&RegisterName::gp1).unwrap();
+        assert_eq!(gp1.name, RegisterName::gp1);
+        assert_eq!(gp1.readable, true);
+        assert_eq!(gp1.writeable, true);
 
-        let gr2 = pu.register_file.get(&RegisterName::gr2).unwrap();
-        assert_eq!(gr2.name, RegisterName::gr2);
-        assert_eq!(gr2.readable, true);
-        assert_eq!(gr2.writeable, true);
+        let gp2 = pu.register_file.get(&RegisterName::gp2).unwrap();
+        assert_eq!(gp2.name, RegisterName::gp2);
+        assert_eq!(gp2.readable, true);
+        assert_eq!(gp2.writeable, true);
 
-        let gr3 = pu.register_file.get(&RegisterName::gr3).unwrap();
-        assert_eq!(gr3.name, RegisterName::gr3);
-        assert_eq!(gr3.readable, true);
-        assert_eq!(gr3.writeable, true);
+        let gp3 = pu.register_file.get(&RegisterName::gp3).unwrap();
+        assert_eq!(gp3.name, RegisterName::gp3);
+        assert_eq!(gp3.readable, true);
+        assert_eq!(gp3.writeable, true);
 
-        let gr4 = pu.register_file.get(&RegisterName::gr4).unwrap();
-        assert_eq!(gr4.name, RegisterName::gr4);
-        assert_eq!(gr4.readable, true);
-        assert_eq!(gr4.writeable, true);
+        let gp4 = pu.register_file.get(&RegisterName::gp4).unwrap();
+        assert_eq!(gp4.name, RegisterName::gp4);
+        assert_eq!(gp4.readable, true);
+        assert_eq!(gp4.writeable, true);
 
-        let gr5 = pu.register_file.get(&RegisterName::gr5).unwrap();
-        assert_eq!(gr5.name, RegisterName::gr5);
-        assert_eq!(gr5.readable, true);
-        assert_eq!(gr5.writeable, true);
+        let gp5 = pu.register_file.get(&RegisterName::gp5).unwrap();
+        assert_eq!(gp5.name, RegisterName::gp5);
+        assert_eq!(gp5.readable, true);
+        assert_eq!(gp5.writeable, true);
 
-        let gr6 = pu.register_file.get(&RegisterName::gr6).unwrap();
-        assert_eq!(gr6.name, RegisterName::gr6);
-        assert_eq!(gr6.readable, true);
-        assert_eq!(gr6.writeable, true);
+        let gp6 = pu.register_file.get(&RegisterName::gp6).unwrap();
+        assert_eq!(gp6.name, RegisterName::gp6);
+        assert_eq!(gp6.readable, true);
+        assert_eq!(gp6.writeable, true);
 
-        let gr7 = pu.register_file.get(&RegisterName::gr7).unwrap();
-        assert_eq!(gr7.name, RegisterName::gr7);
-        assert_eq!(gr7.readable, true);
-        assert_eq!(gr7.writeable, true);
+        let gp7 = pu.register_file.get(&RegisterName::gp7).unwrap();
+        assert_eq!(gp7.name, RegisterName::gp7);
+        assert_eq!(gp7.readable, true);
+        assert_eq!(gp7.writeable, true);
 
         let pc = pu.register_file.get(&RegisterName::pc).unwrap();
         assert_eq!(pc.name, RegisterName::pc);
@@ -215,10 +215,10 @@ mod tests {
         assert_eq!(out.writeable, true);
 
         #[allow(non_snake_case)]
-        let srA = pu.register_file.get(&RegisterName::srA).unwrap();
-        assert_eq!(srA.name, RegisterName::srA);
-        assert_eq!(srA.readable, true);
-        assert_eq!(srA.writeable, false);
+        let ans = pu.register_file.get(&RegisterName::ans).unwrap();
+        assert_eq!(ans.name, RegisterName::ans);
+        assert_eq!(ans.readable, true);
+        assert_eq!(ans.writeable, false);
     }
 
     #[test]
@@ -238,21 +238,21 @@ mod tests {
         let mut pu = ProcessingUnit::new(&mut _buffer);
 
         let source = [
-            "put 7 gr0",
-            "cp srA out"
+            "put 7 gp0",
+            "cp ans out"
         ];
         let source = source.join("\n");
         let program = Program::try_compile(&source).unwrap();
 
         pu.load_program(program);
 
-        // put 7 gr0
+        // put 7 gp0
         assert_eq!(pu.memory[0], 1);
         assert_eq!(pu.memory[1], 7);
         assert_eq!(pu.memory[2], 0);
         assert_eq!(pu.memory[3], 0);
 
-        // cp srA out
+        // cp ans out
         assert_eq!(pu.memory[4], 3);
         assert_eq!(pu.memory[5], 10);
         assert_eq!(pu.memory[6], 8);
