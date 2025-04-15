@@ -12,3 +12,6 @@ integration:
 		| grep 17711 > /dev/null
 	cargo run -- examples/nophop.s 2>&1 \
 		| grep 20 > /dev/null
+	cargo run -- examples/countdown.s 2>&1 \
+		| tr '\n' ' ' \
+		| grep '5 4 3 2 1 0' > /dev/null

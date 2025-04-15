@@ -25,7 +25,10 @@ pub enum ExecutionError {
     CannotCpTo(RegisterName),
 
     #[error("Cannot fit {0} + {1} into a register")]
-    Overflow(u16, u16)
+    Overflow(u16, u16),
+
+    #[error("Cannot fit {0} - {1} into a register")]
+    Underflow(u16, u16),
 }
 
 pub struct Core<'tty, W: Write> {
@@ -161,6 +164,31 @@ impl<'tty, W: Write> Core<'tty, W> {
         Ok(())
     }
 
+    fn sub(&mut self, x: RegisterName, y: RegisterName)
+        -> Result<()>
+    {
+        let x: u16 = match x {
+            RegisterName::out => {
+                return Err(ExecutionError::CannotAdd(x).into());
+            },
+            _ => self.register_file.read(x)
+        };
+
+        let y: u16 = match y {
+            RegisterName::out => {
+                return Err(ExecutionError::CannotAdd(y).into());
+            },
+            _ => self.register_file.read(y)
+        };
+
+        let ans = x.checked_sub(y).ok_or(
+            ExecutionError::Underflow(x,y)
+        )?;
+        self.register_file.write(RegisterName::ans, ans);
+
+        Ok(())
+    }
+
     fn execute_single_instruction(&mut self) -> Result<bool> {
         let mut instr: [u8; 4] = [0; 4];
         let pc = self.register_file.read(RegisterName::pc);
@@ -177,6 +205,7 @@ impl<'tty, W: Write> Core<'tty, W> {
             Instruction::jmp(addr) => self.jmp(addr)?,
             Instruction::nop => (),
             Instruction::put(val, dst) => self.put(val, dst)?,
+            Instruction::sub(x, y) => self.sub(x, y)?,
         }
         let pc = self.register_file.read(RegisterName::pc);
         self.register_file.write(RegisterName::pc, pc + 4);
