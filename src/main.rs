@@ -1,4 +1,4 @@
-use ybrpu;
+use rpu;
 use anyhow::Result;
 
 use std::env;
@@ -7,7 +7,7 @@ use std::io;
 
 fn main() -> Result<()> {
     let mut stdout = io::stdout();
-    let mut pu = ybrpu::ProcessingUnit::new(&mut stdout);
+    let mut pu = rpu::ProcessingUnit::new(&mut stdout);
 
     for file in env::args().skip(1) {
         println!("");
