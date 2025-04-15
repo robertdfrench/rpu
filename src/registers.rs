@@ -12,8 +12,10 @@ pub struct RegisterFile {
     gp5: u16,
     gp6: u16,
     gp7: u16,
+
+    ans: u16,
+    dvc: u16,
     pc:  u16,
-    ans: u16
 }
 
 impl RegisterFile {
@@ -27,8 +29,10 @@ impl RegisterFile {
             gp5: 0,
             gp6: 0,
             gp7: 0,
-            pc:  0,
+
             ans: 0,
+            dvc: 0,
+            pc:  0,
         }
     }
 
@@ -42,9 +46,12 @@ impl RegisterFile {
             RegisterName::gp5 => { self.gp5 = val },
             RegisterName::gp6 => { self.gp6 = val },
             RegisterName::gp7 => { self.gp7 = val },
+
+            RegisterName::ans => { self.ans = val },
+            RegisterName::dvc => { self.dvc = val },
+            RegisterName::inp => panic!("inp is a pseudo-register"),
             RegisterName::out => panic!("out is a pseudo-register"),
             RegisterName::pc  => { self.pc = val},
-            RegisterName::ans => { self.ans = val },
         }
     }
 
@@ -58,9 +65,12 @@ impl RegisterFile {
             RegisterName::gp5 => self.gp5,
             RegisterName::gp6 => self.gp6,
             RegisterName::gp7 => self.gp7,
+
+            RegisterName::ans => self.ans,
+            RegisterName::dvc => self.dvc,
+            RegisterName::inp => panic!("inp is a pseudo-register"),
             RegisterName::out => panic!("out is a pseudo-register"),
             RegisterName::pc  => self.pc,
-            RegisterName::ans => self.ans,
         }
     }
 
@@ -78,10 +88,26 @@ pub enum RegisterName {
     gp5,
     gp6,
     gp7,
+    ans,
+    dvc,
+    inp,
     out,
     pc,
-    ans,
 }
+
+const GP0_ID: u8 = RegisterName::gp0 as u8;
+const GP1_ID: u8 = RegisterName::gp1 as u8;
+const GP2_ID: u8 = RegisterName::gp2 as u8;
+const GP3_ID: u8 = RegisterName::gp3 as u8;
+const GP4_ID: u8 = RegisterName::gp4 as u8;
+const GP5_ID: u8 = RegisterName::gp5 as u8;
+const GP6_ID: u8 = RegisterName::gp6 as u8;
+const GP7_ID: u8 = RegisterName::gp7 as u8;
+const ANS_ID: u8 = RegisterName::ans as u8;
+const DVC_ID: u8 = RegisterName::dvc as u8;
+const INP_ID: u8 = RegisterName::inp as u8;
+const OUT_ID: u8 = RegisterName::out as u8;
+const PC_ID: u8 = RegisterName::pc as u8;
 
 #[derive(Error, Debug)]
 pub enum ParseError {
@@ -106,43 +132,33 @@ impl RegisterName {
             "gp5" => Ok(RegisterName::gp5),
             "gp6" => Ok(RegisterName::gp6),
             "gp7" => Ok(RegisterName::gp7),
+
+            "ans" => Ok(RegisterName::ans),
+            "dvc" => Ok(RegisterName::dvc),
+            "inp" => Ok(RegisterName::inp),
             "out" => Ok(RegisterName::out),
             "pc"  => Ok(RegisterName::pc),
-            "ans" => Ok(RegisterName::ans),
             _ => Err(ParseError::NoSuchRegisterName(s.to_string()).into())
         }
     }
 
     pub fn try_from_u8(x: u8) -> Result<Self> {
         match x {
-            0 => Ok(RegisterName::gp0),
-            1 => Ok(RegisterName::gp1),
-            2 => Ok(RegisterName::gp2),
-            3 => Ok(RegisterName::gp3),
-            4 => Ok(RegisterName::gp4),
-            5 => Ok(RegisterName::gp5),
-            6 => Ok(RegisterName::gp6),
-            7 => Ok(RegisterName::gp7),
-            8 => Ok(RegisterName::out),
-            9 => Ok(RegisterName::pc),
-            10 => Ok(RegisterName::ans),
-            _ => Err(DecodeError::NoSuchRegisterName(x).into())
-        }
-    }
+            GP0_ID => Ok(RegisterName::gp0),
+            GP1_ID => Ok(RegisterName::gp1),
+            GP2_ID => Ok(RegisterName::gp2),
+            GP3_ID => Ok(RegisterName::gp3),
+            GP4_ID => Ok(RegisterName::gp4),
+            GP5_ID => Ok(RegisterName::gp5),
+            GP6_ID => Ok(RegisterName::gp6),
+            GP7_ID => Ok(RegisterName::gp7),
 
-    pub fn as_u8(&self) -> u8 {
-        match self {
-            RegisterName::gp0 => 0,
-            RegisterName::gp1 => 1,
-            RegisterName::gp2 => 2,
-            RegisterName::gp3 => 3,
-            RegisterName::gp4 => 4,
-            RegisterName::gp5 => 5,
-            RegisterName::gp6 => 6,
-            RegisterName::gp7 => 7,
-            RegisterName::out => 8,
-            RegisterName::pc => 9,
-            RegisterName::ans => 10,
+            ANS_ID => Ok(RegisterName::ans),
+            DVC_ID => Ok(RegisterName::dvc),
+            INP_ID => Ok(RegisterName::inp),
+            OUT_ID => Ok(RegisterName::out),
+            PC_ID => Ok(RegisterName::pc),
+            _ => Err(DecodeError::NoSuchRegisterName(x).into())
         }
     }
 }
@@ -162,9 +178,11 @@ mod tests {
             ("gp5", RegisterName::gp5),
             ("gp6", RegisterName::gp6),
             ("gp7", RegisterName::gp7),
+            ("ans", RegisterName::ans),
+            ("dvc", RegisterName::dvc),
+            ("inp", RegisterName::inp),
             ("out", RegisterName::out),
             ("pc", RegisterName::pc),
-            ("ans", RegisterName::ans),
         ];
         for (text, expected) in pairs {
             let actual: RegisterName = RegisterName::try_from_str(text).unwrap();
@@ -175,17 +193,19 @@ mod tests {
     #[test]
     fn decode_registers() {
         let pairs: Vec<(u8, RegisterName)> = vec![
-            (0, RegisterName::gp0),
-            (1, RegisterName::gp1),
-            (2, RegisterName::gp2),
-            (3, RegisterName::gp3),
-            (4, RegisterName::gp4),
-            (5, RegisterName::gp5),
-            (6, RegisterName::gp6),
-            (7, RegisterName::gp7),
-            (8, RegisterName::out),
-            (9, RegisterName::pc),
-            (10, RegisterName::ans),
+            (GP0_ID, RegisterName::gp0),
+            (GP1_ID, RegisterName::gp1),
+            (GP2_ID, RegisterName::gp2),
+            (GP3_ID, RegisterName::gp3),
+            (GP4_ID, RegisterName::gp4),
+            (GP5_ID, RegisterName::gp5),
+            (GP6_ID, RegisterName::gp6),
+            (GP7_ID, RegisterName::gp7),
+            (ANS_ID, RegisterName::ans),
+            (DVC_ID, RegisterName::dvc),
+            (INP_ID, RegisterName::inp),
+            (OUT_ID, RegisterName::out),
+            (PC_ID, RegisterName::pc),
         ];
         for (byte, expected) in pairs {
             let actual: RegisterName = RegisterName::try_from_u8(byte).unwrap();
@@ -196,20 +216,22 @@ mod tests {
     #[test]
     fn encode_registers() {
         let pairs: Vec<(u8, RegisterName)> = vec![
-            (0, RegisterName::gp0),
-            (1, RegisterName::gp1),
-            (2, RegisterName::gp2),
-            (3, RegisterName::gp3),
-            (4, RegisterName::gp4),
-            (5, RegisterName::gp5),
-            (6, RegisterName::gp6),
-            (7, RegisterName::gp7),
-            (8, RegisterName::out),
-            (9, RegisterName::pc),
-            (10, RegisterName::ans),
+            (GP0_ID, RegisterName::gp0),
+            (GP1_ID, RegisterName::gp1),
+            (GP2_ID, RegisterName::gp2),
+            (GP3_ID, RegisterName::gp3),
+            (GP4_ID, RegisterName::gp4),
+            (GP5_ID, RegisterName::gp5),
+            (GP6_ID, RegisterName::gp6),
+            (GP7_ID, RegisterName::gp7),
+            (ANS_ID, RegisterName::ans),
+            (DVC_ID, RegisterName::dvc),
+            (INP_ID, RegisterName::inp),
+            (OUT_ID, RegisterName::out),
+            (PC_ID, RegisterName::pc),
         ];
         for (expected, register) in pairs {
-            let actual: u8 = register.as_u8();
+            let actual: u8 = register as u8;
             assert_eq!(expected, actual);
         }
     }

@@ -66,6 +66,8 @@ impl<'program> Iterator for EachByte<'program> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::registers::RegisterName;
+    use crate::instructions::InstructionName;
 
     #[test]
     fn compile_valid_code() {
@@ -97,15 +99,15 @@ mod tests {
         }
 
         // put 7 gp0
-        assert_eq!(results[0], 1);
+        assert_eq!(results[0], InstructionName::put as u8);
         assert_eq!(results[1], 7);
         assert_eq!(results[2], 0);
-        assert_eq!(results[3], 0);
+        assert_eq!(results[3], RegisterName::gp0 as u8);
 
         // cp ans out
-        assert_eq!(results[4], 3);
-        assert_eq!(results[5], 10);
-        assert_eq!(results[6], 8);
+        assert_eq!(results[4], InstructionName::cp as u8);
+        assert_eq!(results[5], RegisterName::ans as u8);
+        assert_eq!(results[6], RegisterName::out as u8);
         assert_eq!(results[7], 0);
     }
 }
