@@ -6,9 +6,10 @@ use crate::registers::RegisterName;
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq)]
 pub enum InstructionName {
+    hcf = 0, // This must come first so that "null" instrs halt the machine
+
     add,
     cp,
-    hcf,
     put,
 }
 
