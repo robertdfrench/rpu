@@ -1,17 +1,12 @@
-check: test
-
-debug:
-	rust-lldb `make _latest_debug_target`
-
-_latest_debug_target:
-	@find target/debug/deps -type f -not -name "*.*" \
-		| xargs -n1 stat -f "%m %N" -t "%s" \
-		| sort \
-		| tail -n1 \
-		| cut -d' ' -f2
+check: test integration
 
 test:
 	cargo test
 
-demo:
-	cargo run -- examples/*.s
+integration:
+	cargo run -- examples/print_5.s 2>&1 \
+		| grep 5 > /dev/null
+	cargo run -- examples/add_5_7.s 2>&1 \
+		| grep 12 > /dev/null
+	(cargo run -- examples/fibonacci.s || true) 2>&1 \
+		| grep 17711 > /dev/null
