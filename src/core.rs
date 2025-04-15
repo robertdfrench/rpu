@@ -23,6 +23,9 @@ pub enum ExecutionError {
 
     #[error("Cannot 'cp' to Register {0:?}")]
     CannotCpTo(RegisterName),
+
+    #[error("Cannot fit {0} + {1} into a register")]
+    Overflow(u16, u16)
 }
 
 pub struct Core<'tty, W: Write> {
@@ -104,7 +107,10 @@ impl<'tty, W: Write> Core<'tty, W> {
             _ => self.register_file.read(y)
         };
 
-        self.register_file.write(RegisterName::ans, x+y);
+        let ans = x.checked_add(y).ok_or(
+            ExecutionError::Overflow(x,y)
+        )?;
+        self.register_file.write(RegisterName::ans, ans);
 
         Ok(())
     }
