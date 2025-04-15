@@ -5,10 +5,10 @@ put 0   gp7
 
 # Print inital values
 cp  gp0 out
-cp  gp1 out :LOOP
+cp  gp1 out
 
 # Main loop
-add gp0 gp1
+add gp0 gp1 :LOOP
 cp  ans out
 cp  gp1 gp0
 cp  ans gp1

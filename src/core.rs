@@ -140,7 +140,14 @@ impl<'tty, W: Write> Core<'tty, W> {
     }
 
     fn jmp(&mut self, addr: RegisterName) -> Result<()> {
-        let addr = self.register_file.read(addr);
+        let mut addr = self.register_file.read(addr);
+        addr = addr - (addr % 4); // Align addr to 4n
+        if addr > 0 {
+            // Back up to previous address unless that would go
+            // negative. This means that `jmp 4` and `jmp 0`
+            // have the same behavior.
+            addr = addr - 4;
+        }
         let ans = self.register_file.read(RegisterName::ans);
         if ans == 0 {
             self.register_file.write(RegisterName::pc, addr);
