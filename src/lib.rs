@@ -1,7 +1,6 @@
 mod registers;
 mod instructions;
 mod programs;
-
 use std::io::Write;
 use instructions::Instruction;
 use registers::RegisterName;
@@ -53,7 +52,11 @@ impl<'tty, W: Write> ProcessingUnit<'tty, W> {
 
     fn load_program(&mut self, program: Program) -> Result<()> {
         if program.size() >= 65_536 {
-            return Err(ExecutionError::ProgramTooBig(program.size()).into());
+            return Err(
+                ExecutionError::ProgramTooBig(
+                    program.size()
+                ).into()
+            );
         }
         for (i, byte) in program.bytes().enumerate() {
             self.memory[i] = byte;
@@ -67,11 +70,19 @@ impl<'tty, W: Write> ProcessingUnit<'tty, W> {
         Ok(())
     }
 
-    fn put(&mut self, val: u16, dst: RegisterName) -> Result<()> {
+    fn put(&mut self, val: u16, dst: RegisterName)
+        -> Result<()>
+    {
         match dst {
-            RegisterName::pc => Err(ExecutionError::CannotPut(dst).into()),
-            RegisterName::ans => Err(ExecutionError::CannotPut(dst).into()), 
-            RegisterName::out => Err(ExecutionError::CannotPut(dst).into()),
+            RegisterName::pc => Err(
+                ExecutionError::CannotPut(dst).into()
+            ),
+            RegisterName::ans => Err(
+                ExecutionError::CannotPut(dst).into()
+            ),
+            RegisterName::out => Err(
+                ExecutionError::CannotPut(dst).into()
+            ),
             _ => {
                 self.register_file.write(dst, val);
                 Ok(())
@@ -79,7 +90,9 @@ impl<'tty, W: Write> ProcessingUnit<'tty, W> {
         }
     }
 
-    fn add(&mut self, x: RegisterName, y: RegisterName) -> Result<()> {
+    fn add(&mut self, x: RegisterName, y: RegisterName)
+        -> Result<()>
+    {
         let x: u16 = match x {
             RegisterName::out => {
                 return Err(ExecutionError::CannotAdd(x).into());
@@ -99,17 +112,25 @@ impl<'tty, W: Write> ProcessingUnit<'tty, W> {
         Ok(())
     }
 
-    fn cp(&mut self, src: RegisterName, dst: RegisterName) -> Result<()> {
+    fn cp(&mut self, src: RegisterName, dst: RegisterName)
+        -> Result<()>
+    {
         let val = match src {
             RegisterName::out => {
-                return Err(ExecutionError::CannotCpFrom(dst).into());
+                return Err(
+                    ExecutionError::CannotCpFrom(dst).into()
+                );
             },
             _ => self.register_file.read(src)
         };
 
         match dst {
-            RegisterName::pc => Err(ExecutionError::CannotCpTo(dst).into()),
-            RegisterName::ans => Err(ExecutionError::CannotCpTo(dst).into()), 
+            RegisterName::pc => Err(
+                ExecutionError::CannotCpTo(dst).into()
+            ),
+            RegisterName::ans => Err(
+                ExecutionError::CannotCpTo(dst).into()
+            ), 
             RegisterName::out => {
                 self.write_tty(val)?;
                 Ok(())
@@ -131,16 +152,16 @@ impl<'tty, W: Write> ProcessingUnit<'tty, W> {
     }
 
     fn execute_single_instruction(&mut self) -> Result<bool> {
-        let mut instruction: [u8; 4] = [0; 4];
+        let mut instr: [u8; 4] = [0; 4];
         let pc = self.register_file.read(RegisterName::pc);
-        instruction[0] = self.memory[(pc as usize) + 0];
-        instruction[1] = self.memory[(pc as usize) + 1];
-        instruction[2] = self.memory[(pc as usize) + 2];
-        instruction[3] = self.memory[(pc as usize) + 3];
-        let instruction = u32::from_ne_bytes(instruction);
-        let instruction = Instruction::try_from_u32(instruction)?;
-        match instruction {
-            Instruction::hcf => { return Ok(true) },
+        instr[0] = self.memory[(pc as usize) + 0];
+        instr[1] = self.memory[(pc as usize) + 1];
+        instr[2] = self.memory[(pc as usize) + 2];
+        instr[3] = self.memory[(pc as usize) + 3];
+        let instr = u32::from_ne_bytes(instr);
+        let instr = Instruction::try_from_u32(instr)?;
+        match instr {
+            Instruction::halt => { return Ok(true) },
             Instruction::add(x, y) => self.add(x, y)?,
             Instruction::cp(src, dst) => self.cp(src, dst)?,
             Instruction::jmp(addr) => self.jmp(addr)?,

@@ -1,9 +1,14 @@
+# Setup
 put 0   gp0
 put 1   gp1
 put 0   gp7
 put 20  gp6
+
+# Print inital values
 cp  gp0 out
 cp  gp1 out
+
+# Main loop
 add gp0 gp1
 cp  ans out
 cp  gp1 gp0

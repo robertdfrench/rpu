@@ -11,6 +11,8 @@ impl Program {
         let mut instructions = vec![];
 
         for line in source.lines() {
+            if line.starts_with("#") { continue; }
+            if line.len() == 0 { continue; }
             let instruction = Instruction::try_from_str(line)?;
             instructions.push(instruction);
         }
@@ -19,37 +21,41 @@ impl Program {
     }
 
     pub fn size(&self) -> usize {
-        self.instructions.len() * std::mem::size_of::<Instruction>()
+        let width = std::mem::size_of::<Instruction>();
+        self.instructions.len() * width
     }
 
-    pub fn bytes<'program>(&'program self) -> EachByte<'program> {
+    pub fn bytes<'p>(&'p self) -> EachByte<'p> {
         EachByte::new(self)
     }
 }
 
-pub struct EachByte<'program> {
-    program: &'program Program,
+pub struct EachByte<'p> {
+    program: &'p Program,
     instruction_number: usize,
     offset: usize
 }
 
-impl<'program> EachByte<'program> {
-    fn new(program: &'program Program) -> Self {
+impl<'p> EachByte<'p> {
+    fn new(program: &'p Program) -> Self {
         let instruction_number = 0;
         let offset = 0;
         Self{ program, instruction_number, offset }
     }
 }
 
-impl<'program> Iterator for EachByte<'program> {
+impl<'p> Iterator for EachByte<'p> {
     type Item = u8;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.instruction_number >= self.program.instructions.len() {
+        let program_end = self.program.instructions.len();
+        if self.instruction_number >= program_end {
             return None;
         }
 
-        let instr = &self.program.instructions[self.instruction_number];
+        let instr = &self.program.instructions[
+            self.instruction_number
+        ];
         let bytes = instr.to_u32().to_ne_bytes();
         let result = bytes[self.offset];
         self.offset += 1;
@@ -74,6 +80,38 @@ mod tests {
         let source = [
             "put 7 gp0",
             "put 5 gp1",
+            "add gp1 gp0",
+            "cp ans out"
+        ];
+        let source = source.join("\n");
+
+        let program = Program::try_compile(&source).unwrap();
+
+        assert_eq!(program.size(), 16);
+    }
+
+    #[test]
+    fn compile_code_with_comments() {
+        let source = [
+            "put 7 gp0",
+            "put 5 gp1",
+            "# add the values",
+            "add gp1 gp0",
+            "cp ans out"
+        ];
+        let source = source.join("\n");
+
+        let program = Program::try_compile(&source).unwrap();
+
+        assert_eq!(program.size(), 16);
+    }
+
+    #[test]
+    fn compile_code_with_blank_lines() {
+        let source = [
+            "put 7 gp0",
+            "put 5 gp1",
+            "",
             "add gp1 gp0",
             "cp ans out"
         ];

@@ -10,6 +10,8 @@ fn main() -> Result<()> {
     let mut pu = ybrpu::ProcessingUnit::new(&mut stdout);
 
     for file in env::args().skip(1) {
+        println!("");
+        println!("# {file}");
         let source = fs::read_to_string(file)?;
         pu.load_source(&source)?;
         pu.start()?;

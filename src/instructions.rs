@@ -6,14 +6,15 @@ use crate::registers::RegisterName;
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq)]
 pub enum InstructionName {
-    hcf = 0, // This must come first so that "null" instrs halt the machine
+    // This must come first so that "0" instrs halt the machine
+    halt = 0,
     add,
     cp,
     jmp,
     put,
 }
 
-const HCF_ID: u8 = InstructionName::hcf as u8;
+const HALT_ID: u8 = InstructionName::halt as u8;
 const ADD_ID: u8 = InstructionName::add as u8;
 const CP_ID: u8 = InstructionName::cp as u8;
 const JMP_ID: u8 = InstructionName::jmp as u8;
@@ -22,7 +23,7 @@ const PUT_ID: u8 = InstructionName::put as u8;
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq)]
 pub enum Instruction {
-    hcf,
+    halt,
     add(RegisterName, RegisterName),
     cp(RegisterName, RegisterName),
     jmp(RegisterName),
@@ -45,7 +46,7 @@ impl Instruction {
     pub fn try_from_str(s: &str) -> Result<Self> {
         let p: Vec<&str> = s.trim_end().split_whitespace().collect();
         match p[0] {
-            "hcf" => Ok(Instruction::hcf),
+            "halt" => Ok(Instruction::halt),
             "add" => {
                 let src = RegisterName::try_from_str(p[1])?;
                 let dst = RegisterName::try_from_str(p[2])?;
@@ -71,8 +72,8 @@ impl Instruction {
 
     pub fn to_u32(&self) -> u32 {
         match self {
-            Instruction::hcf => {
-                u32::from_ne_bytes([HCF_ID,0,0,0])
+            Instruction::halt => {
+                u32::from_ne_bytes([HALT_ID,0,0,0])
             },
             Instruction::add(x, y) => {
                 u32::from_ne_bytes([ADD_ID,*x as u8,*y as u8,0])
@@ -94,7 +95,7 @@ impl Instruction {
         let bytes = encoded.to_ne_bytes();
         let instr = bytes[0];
         match instr {
-            HCF_ID => Ok(Instruction::hcf),
+            HALT_ID => Ok(Instruction::halt),
             ADD_ID => {
                 let x = RegisterName::try_from_u8(bytes[1])?;
                 let y = RegisterName::try_from_u8(bytes[2])?;
@@ -126,7 +127,7 @@ mod tests {
     #[test]
     fn parse_instructions() {
         let pairs = vec![
-            ("hcf", Instruction::hcf),
+            ("halt", Instruction::halt),
             ("put 7 gp0", Instruction::put(7, RegisterName::gp0)),
             (
                 "add gp0 gp1",
@@ -165,8 +166,8 @@ mod tests {
                 ])
             ),
             (
-                Instruction::hcf,
-                u32::from_ne_bytes([InstructionName::hcf as u8, 0, 0, 0])
+                Instruction::halt,
+                u32::from_ne_bytes([InstructionName::halt as u8, 0, 0, 0])
             ),
             (
                 Instruction::put(7, RegisterName::gp0),
@@ -206,8 +207,8 @@ mod tests {
                 ])
             ),
             (
-                Instruction::hcf,
-                u32::from_ne_bytes([HCF_ID,0,0,0])
+                Instruction::halt,
+                u32::from_ne_bytes([HALT_ID,0,0,0])
             ),
             (
                 Instruction::put(7, RegisterName::gp0),
