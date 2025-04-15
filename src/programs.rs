@@ -1,8 +1,6 @@
 use anyhow::Result;
-use thiserror::Error;
 
 use crate::instructions::Instruction;
-use crate::registers::RegisterName;
 
 pub struct Program {
     instructions: Vec<Instruction>

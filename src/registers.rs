@@ -1,71 +1,74 @@
 use anyhow::Result;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
-pub enum AccessError {
-    #[error("You tried to write to register '{0:?}', but it is read-only")]
-    CannotWrite(RegisterName),
-
-    #[error("You tried to read from register '{0:?}', but it is write-only")]
-    CannotRead(RegisterName)
-}
-
 #[derive(Debug)]
-pub struct Register {
-    pub name: RegisterName,
-    pub readable: bool,
-    pub writeable: bool,
-    pub value: u16
+#[allow(non_snake_case)]
+pub struct RegisterFile {
+    gr0: u16,
+    gr1: u16,
+    gr2: u16,
+    gr3: u16,
+    gr4: u16,
+    gr5: u16,
+    gr6: u16,
+    gr7: u16,
+    pc:  u16,
+    srA: u16
 }
 
-impl Register {
-    pub fn new_ro(name: RegisterName) -> Self {
+impl RegisterFile {
+    pub fn new() -> Self {
         Self {
-            name,
-            readable: true,
-            writeable: false,
-            value: 0
+            gr0: 0,
+            gr1: 0,
+            gr2: 0,
+            gr3: 0,
+            gr4: 0,
+            gr5: 0,
+            gr6: 0,
+            gr7: 0,
+            pc:  0,
+            srA: 0,
         }
     }
 
-    pub fn new_wo(name: RegisterName) -> Self {
-        Self {
-            name,
-            readable: false,
-            writeable: true,
-            value: 0
+    pub fn write(&mut self, name: RegisterName, val: u16) {
+        match name {
+            RegisterName::gr0 => { self.gr0 = val },
+            RegisterName::gr1 => { self.gr1 = val },
+            RegisterName::gr2 => { self.gr2 = val },
+            RegisterName::gr3 => { self.gr3 = val },
+            RegisterName::gr4 => { self.gr4 = val },
+            RegisterName::gr5 => { self.gr5 = val },
+            RegisterName::gr6 => { self.gr6 = val },
+            RegisterName::gr7 => { self.gr7 = val },
+            RegisterName::out => panic!("out is a pseudo-register"),
+            RegisterName::pc  => { self.pc = val},
+            RegisterName::srA => { self.srA = val },
         }
     }
 
-    pub fn new_rw(name: RegisterName) -> Self {
-        Self {
-            name,
-            readable: true,
-            writeable: true,
-            value: 0
+    pub fn read(&mut self, name: RegisterName) -> u16 {
+        match name {
+            RegisterName::gr0 => self.gr0,
+            RegisterName::gr1 => self.gr1,
+            RegisterName::gr2 => self.gr2,
+            RegisterName::gr3 => self.gr3,
+            RegisterName::gr4 => self.gr4,
+            RegisterName::gr5 => self.gr5,
+            RegisterName::gr6 => self.gr6,
+            RegisterName::gr7 => self.gr7,
+            RegisterName::out => panic!("out is a pseudo-register"),
+            RegisterName::pc  => self.pc,
+            RegisterName::srA => self.srA,
         }
     }
 
-    pub fn try_write(&mut self, value: u16) -> Result<()> {
-        if !self.writeable {
-            Err(AccessError::CannotWrite(self.name).into())
-        } else {
-            self.value = value;
-            Ok(())
-        }
-    }
-
-    pub fn try_read(&self) -> Result<u16> {
-        if !self.readable {
-            Err(AccessError::CannotRead(self.name).into())
-        } else {
-            Ok(self.value)
-        }
-    }
 }
+
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum RegisterName {
     gr0,
     gr1,
@@ -209,40 +212,5 @@ mod tests {
             let actual: u8 = register.as_u8();
             assert_eq!(expected, actual);
         }
-    }
-
-    #[test]
-    #[should_panic]
-    fn enforce_register_readonly() {
-        let mut gr0 = Register::new_ro(RegisterName::gr0);
-        gr0.try_write(7).unwrap();
-    }
-
-    #[test]
-    fn read_from_ro_register() {
-        let mut gr0 = Register::new_ro(RegisterName::gr0);
-        gr0.value = 5;
-        assert_eq!(gr0.try_read().unwrap(), 5);
-    }
-
-    #[test]
-    #[should_panic]
-    fn enforce_register_writeonly() {
-        let gr0 = Register::new_wo(RegisterName::gr0);
-        gr0.try_read().unwrap();
-    }
-
-    #[test]
-    fn write_to_wo_register() {
-        let mut gr0 = Register::new_wo(RegisterName::gr0);
-        gr0.try_write(7).unwrap();
-        assert_eq!(gr0.value, 7);
-    }
-
-    #[test]
-    fn rw_register() {
-        let mut gr0 = Register::new_rw(RegisterName::gr0);
-        gr0.try_write(7).unwrap();
-        assert_eq!(gr0.try_read().unwrap(), 7);
     }
 }

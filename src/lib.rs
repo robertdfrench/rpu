@@ -2,91 +2,48 @@ mod registers;
 mod instructions;
 mod programs;
 
-use std::collections::HashMap;
 use std::io::Write;
-use registers::Register;
+use instructions::Instruction;
 use registers::RegisterName;
+use registers::RegisterFile;
 use programs::Program;
 
 use anyhow::Result;
 use thiserror::Error;
 
+#[derive(Error, Debug)]
+pub enum ExecutionError {
+    #[error("Program is too damn big: {0} bytes")]
+    ProgramTooBig(usize),
+
+    #[error("YBRPU Halted")]
+    HaltAndCatchFire,
+
+    #[error("Cannot 'put' into Register {0:?}")]
+    CannotPut(RegisterName),
+
+    #[error("Cannot 'add' from Register {0:?}")]
+    CannotAdd(RegisterName),
+
+    #[error("Cannot 'cp' from Register {0:?}")]
+    CannotCpFrom(RegisterName),
+
+    #[error("Cannot 'cp' to Register {0:?}")]
+    CannotCpTo(RegisterName),
+}
+
 pub struct ProcessingUnit<'output, W: Write> {
-    register_file: HashMap<RegisterName, Register>,
+    register_file: RegisterFile,
+    // Register File
     memory: [u8; 65_536],
     output: &'output mut W
 }
 
 impl<'output, W: Write> ProcessingUnit<'output, W> {
     pub fn new(output: &'output mut W) -> Self {
+        let register_file = RegisterFile::new();
         let memory = [0; 65_536];
-        let mut register_file = HashMap::new();
 
-        // gr0
-        register_file.insert(
-            RegisterName::gr0,
-            Register::new_rw(RegisterName::gr0)
-        );
-
-        // gr1
-        register_file.insert(
-            RegisterName::gr1,
-            Register::new_rw(RegisterName::gr1)
-        );
-
-        // gr2
-        register_file.insert(
-            RegisterName::gr2,
-            Register::new_rw(RegisterName::gr2)
-        );
-
-        // gr3
-        register_file.insert(
-            RegisterName::gr3,
-            Register::new_rw(RegisterName::gr3)
-        );
-
-        // gr4
-        register_file.insert(
-            RegisterName::gr4,
-            Register::new_rw(RegisterName::gr4)
-        );
-
-        // gr5
-        register_file.insert(
-            RegisterName::gr5,
-            Register::new_rw(RegisterName::gr5)
-        );
-
-        // gr6
-        register_file.insert(
-            RegisterName::gr6,
-            Register::new_rw(RegisterName::gr6)
-        );
-
-        // gr7
-        register_file.insert(
-            RegisterName::gr7,
-            Register::new_rw(RegisterName::gr7)
-        );
-
-        // pc
-        register_file.insert(
-            RegisterName::pc,
-            Register::new_ro(RegisterName::pc)
-        );
-
-        // out
-        register_file.insert(
-            RegisterName::out,
-            Register::new_wo(RegisterName::out)
-        );
-
-        // srA
-        register_file.insert(
-            RegisterName::srA,
-            Register::new_ro(RegisterName::srA)
-        );
         Self { register_file, memory, output }
     }
 
@@ -97,9 +54,102 @@ impl<'output, W: Write> ProcessingUnit<'output, W> {
         }
     }
 
-    fn load_program(&mut self, program: Program) {
+    fn load_program(&mut self, program: Program) -> Result<()> {
+        if program.size() >= 65_536 {
+            return Err(ExecutionError::ProgramTooBig(program.size()).into());
+        }
         for (i, byte) in program.bytes().enumerate() {
             self.memory[i] = byte;
+        }
+        Ok(())
+    }
+
+    pub fn load_source(&mut self, source: &str) -> Result<()> {
+        let program = Program::try_compile(source)?;
+        self.load_program(program)?;
+        Ok(())
+    }
+
+    fn hcf(&self) -> Result<()> {
+        Err(ExecutionError::HaltAndCatchFire.into())
+    }
+
+    fn put(&mut self, val: u16, dst: RegisterName) -> Result<()> {
+        match dst {
+            RegisterName::pc => Err(ExecutionError::CannotPut(dst).into()),
+            RegisterName::srA => Err(ExecutionError::CannotPut(dst).into()), 
+            RegisterName::out => Err(ExecutionError::CannotPut(dst).into()),
+            _ => {
+                self.register_file.write(dst, val);
+                Ok(())
+            }
+        }
+    }
+
+    fn add(&mut self, x: RegisterName, y: RegisterName) -> Result<()> {
+        let x: u16 = match x {
+            RegisterName::out => {
+                return Err(ExecutionError::CannotAdd(x).into());
+            },
+            _ => self.register_file.read(x)
+        };
+
+        let y: u16 = match y {
+            RegisterName::out => {
+                return Err(ExecutionError::CannotAdd(y).into());
+            },
+            _ => self.register_file.read(y)
+        };
+
+        self.register_file.write(RegisterName::srA, x+y);
+
+        Ok(())
+    }
+
+    fn cp(&mut self, src: RegisterName, dst: RegisterName) -> Result<()> {
+        let val = match src {
+            RegisterName::out => {
+                return Err(ExecutionError::CannotCpFrom(dst).into());
+            },
+            _ => self.register_file.read(src)
+        };
+
+        match dst {
+            RegisterName::pc => Err(ExecutionError::CannotCpTo(dst).into()),
+            RegisterName::srA => Err(ExecutionError::CannotCpTo(dst).into()), 
+            RegisterName::out => {
+                self.write_output(val)?;
+                Ok(())
+            },
+            _ => {
+                self.register_file.write(dst, val);
+                Ok(())
+            }
+        }
+    }
+
+    fn execute_single_instruction(&mut self) -> Result<()> {
+        let mut instruction: [u8; 4] = [0; 4];
+        let pc = self.register_file.read(RegisterName::pc);
+        instruction[0] = self.memory[(pc as usize) + 0];
+        instruction[1] = self.memory[(pc as usize) + 1];
+        instruction[2] = self.memory[(pc as usize) + 2];
+        instruction[3] = self.memory[(pc as usize) + 3];
+        let instruction = u32::from_ne_bytes(instruction);
+        let instruction = Instruction::try_from_u32(instruction)?;
+        match instruction {
+            Instruction::hcf => self.hcf()?,
+            Instruction::put(val, dst) => self.put(val, dst)?,
+            Instruction::add(x, y) => self.add(x, y)?,
+            Instruction::cp(src, dst) => self.cp(src, dst)?
+        }
+        self.register_file.write(RegisterName::pc, pc + 4);
+        Ok(())
+    }
+
+    pub fn start(&mut self) -> Result<()> {
+        loop {
+            self.execute_single_instruction()?;
         }
     }
 }

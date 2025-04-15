@@ -64,7 +64,7 @@ impl Instruction {
         }
     }
 
-    fn try_from_u32(encoded: u32) -> Result<Self> {
+    pub fn try_from_u32(encoded: u32) -> Result<Self> {
         let bytes = encoded.to_ne_bytes();
         let instr = bytes[0];
         match instr {
