@@ -7,23 +7,25 @@ use crate::registers::RegisterName;
 #[derive(Debug, PartialEq)]
 pub enum InstructionName {
     hcf = 0, // This must come first so that "null" instrs halt the machine
-
     add,
     cp,
+    jmp,
     put,
 }
 
+const HCF_ID: u8 = InstructionName::hcf as u8;
 const ADD_ID: u8 = InstructionName::add as u8;
 const CP_ID: u8 = InstructionName::cp as u8;
-const HCF_ID: u8 = InstructionName::hcf as u8;
+const JMP_ID: u8 = InstructionName::jmp as u8;
 const PUT_ID: u8 = InstructionName::put as u8;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq)]
 pub enum Instruction {
+    hcf,
     add(RegisterName, RegisterName),
     cp(RegisterName, RegisterName),
-    hcf,
+    jmp(RegisterName),
     put(u16, RegisterName),
 }
 
@@ -41,14 +43,9 @@ pub enum DecodeError {
 
 impl Instruction {
     pub fn try_from_str(s: &str) -> Result<Self> {
-        let p: Vec<&str> = s.trim_end().split(' ').collect();
+        let p: Vec<&str> = s.trim_end().split_whitespace().collect();
         match p[0] {
             "hcf" => Ok(Instruction::hcf),
-            "put" => {
-                let val: u16 = p[1].parse()?;
-                let dst = RegisterName::try_from_str(p[2])?;
-                Ok(Instruction::put(val, dst))
-            },
             "add" => {
                 let src = RegisterName::try_from_str(p[1])?;
                 let dst = RegisterName::try_from_str(p[2])?;
@@ -59,20 +56,32 @@ impl Instruction {
                 let dst = RegisterName::try_from_str(p[2])?;
                 Ok(Instruction::cp(src, dst))
             },
+            "jmp" => {
+                let addr = RegisterName::try_from_str(p[1])?;
+                Ok(Instruction::jmp(addr))
+            },
+            "put" => {
+                let val: u16 = p[1].parse()?;
+                let dst = RegisterName::try_from_str(p[2])?;
+                Ok(Instruction::put(val, dst))
+            },
             _ => Err(ParseError::NoSuchInstruction(p[0].to_string()).into())
         }
     }
 
     pub fn to_u32(&self) -> u32 {
         match self {
-            Instruction::add(x, y) => {
-                u32::from_ne_bytes([ADD_ID,*x as u8,*y as u8,0])
-            },
             Instruction::hcf => {
                 u32::from_ne_bytes([HCF_ID,0,0,0])
             },
+            Instruction::add(x, y) => {
+                u32::from_ne_bytes([ADD_ID,*x as u8,*y as u8,0])
+            },
             Instruction::cp(src, dst) => {
                 u32::from_ne_bytes([CP_ID,*src as u8,*dst as u8,0])
+            },
+            Instruction::jmp(addr) => {
+                u32::from_ne_bytes([JMP_ID,*addr as u8,0,0])
             },
             Instruction::put(val, dst) => {
                 let v = val.to_ne_bytes();
@@ -85,6 +94,7 @@ impl Instruction {
         let bytes = encoded.to_ne_bytes();
         let instr = bytes[0];
         match instr {
+            HCF_ID => Ok(Instruction::hcf),
             ADD_ID => {
                 let x = RegisterName::try_from_u8(bytes[1])?;
                 let y = RegisterName::try_from_u8(bytes[2])?;
@@ -95,7 +105,10 @@ impl Instruction {
                 let dst = RegisterName::try_from_u8(bytes[2])?;
                 Ok(Instruction::cp(src, dst))
             },
-            HCF_ID => Ok(Instruction::hcf),
+            JMP_ID => {
+                let addr = RegisterName::try_from_u8(bytes[1])?;
+                Ok(Instruction::jmp(addr))
+            },
             PUT_ID => {
                 let val = u16::from_ne_bytes([bytes[1],bytes[2]]);
                 let dst = RegisterName::try_from_u8(bytes[3])?;

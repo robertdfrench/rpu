@@ -121,6 +121,15 @@ impl<'tty, W: Write> ProcessingUnit<'tty, W> {
         }
     }
 
+    fn jmp(&mut self, addr: RegisterName) -> Result<()> {
+        let addr = self.register_file.read(addr);
+        let ans = self.register_file.read(RegisterName::ans);
+        if ans == 0 {
+            self.register_file.write(RegisterName::pc, addr);
+        }
+        Ok(())
+    }
+
     fn execute_single_instruction(&mut self) -> Result<bool> {
         let mut instruction: [u8; 4] = [0; 4];
         let pc = self.register_file.read(RegisterName::pc);
@@ -132,15 +141,18 @@ impl<'tty, W: Write> ProcessingUnit<'tty, W> {
         let instruction = Instruction::try_from_u32(instruction)?;
         match instruction {
             Instruction::hcf => { return Ok(true) },
-            Instruction::put(val, dst) => self.put(val, dst)?,
             Instruction::add(x, y) => self.add(x, y)?,
-            Instruction::cp(src, dst) => self.cp(src, dst)?
+            Instruction::cp(src, dst) => self.cp(src, dst)?,
+            Instruction::jmp(addr) => self.jmp(addr)?,
+            Instruction::put(val, dst) => self.put(val, dst)?,
         }
+        let pc = self.register_file.read(RegisterName::pc);
         self.register_file.write(RegisterName::pc, pc + 4);
         Ok(false)
     }
 
     pub fn start(&mut self) -> Result<()> {
+        self.register_file.write(RegisterName::pc, 0);
         loop {
             match self.execute_single_instruction() {
                 Err(e) => { return Err(e); },
