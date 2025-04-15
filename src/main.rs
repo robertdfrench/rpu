@@ -7,7 +7,7 @@ use std::io;
 
 fn main() -> Result<()> {
     let mut stdout = io::stdout();
-    let mut pu = rpu::ProcessingUnit::new(&mut stdout);
+    let mut pu = rpu::Core::new(&mut stdout);
 
     for file in env::args().skip(1) {
         println!("");
