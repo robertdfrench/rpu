@@ -1,4 +1,6 @@
 use anyhow::Result;
+use std::collections::HashMap;
+use std::mem::size_of;
 
 use crate::instructions::Instruction;
 
@@ -9,11 +11,34 @@ pub struct Program {
 impl Program {
     pub fn try_compile(source: &str) -> Result<Self> {
         let mut instructions = vec![];
+        let mut labels = HashMap::<String,usize>::new();
 
         for line in source.lines() {
             if line.starts_with("#") { continue; }
             if line.len() == 0 { continue; }
-            let instruction = Instruction::try_from_str(line)?;
+            let mut parts: Vec<String> = line
+                .split_whitespace()
+                .map(|s| s.to_string())
+                .collect();
+            for i in 0..(parts.len() - 1) {
+                if parts[i].starts_with(":") {
+                    // This is a :LABEL
+                    // It needs to be replaced
+                    let address = labels.get(&parts[i])
+                        .unwrap();
+                    parts[i] = format!("{address}");
+                }
+            }
+            if parts.len() == 4 {
+                let label = parts[3].clone();
+                if label.starts_with(":") {
+                    let width = size_of::<Instruction>();
+                    let address = instructions.len() * width;
+                    labels.insert(label, address);
+                }
+            }
+            let line = parts.join(" ");
+            let instruction = Instruction::try_from_str(&line)?;
             instructions.push(instruction);
         }
 
@@ -21,8 +46,7 @@ impl Program {
     }
 
     pub fn size(&self) -> usize {
-        let width = std::mem::size_of::<Instruction>();
-        self.instructions.len() * width
+        self.instructions.len() * size_of::<Instruction>()
     }
 
     pub fn bytes<'p>(&'p self) -> EachByte<'p> {
@@ -123,6 +147,40 @@ mod tests {
     }
 
     #[test]
+    fn test_address_replacement() {
+        let source = [
+            "put 7 gp0",
+            "cp ans out :LABEL",
+            "put :LABEL gp1",
+        ];
+        let source = source.join("\n");
+        let program = Program::try_compile(&source).unwrap();
+
+        let mut memory: Vec<u8> = vec![];
+        for byte in program.bytes() {
+            memory.push(byte);
+        }
+
+        // put 7 gp0
+        assert_eq!(memory[0], InstructionName::put as u8);
+        assert_eq!(memory[1], 7);
+        assert_eq!(memory[2], 0);
+        assert_eq!(memory[3], RegisterName::gp0 as u8);
+
+        // cp ans out
+        assert_eq!(memory[4], InstructionName::cp as u8);
+        assert_eq!(memory[5], RegisterName::ans as u8);
+        assert_eq!(memory[6], RegisterName::out as u8);
+        assert_eq!(memory[7], 0);
+
+        // put :LABEL(==4) gp1
+        assert_eq!(memory[8], InstructionName::put as u8);
+        assert_eq!(memory[9], 4);
+        assert_eq!(memory[10], 0);
+        assert_eq!(memory[11], RegisterName::gp1 as u8);
+    }
+
+    #[test]
     fn test_iterator() {
         let source = [
             "put 7 gp0",
@@ -131,21 +189,21 @@ mod tests {
         let source = source.join("\n");
         let program = Program::try_compile(&source).unwrap();
 
-        let mut results: Vec<u8> = vec![];
+        let mut memory: Vec<u8> = vec![];
         for byte in program.bytes() {
-            results.push(byte);
+            memory.push(byte);
         }
 
         // put 7 gp0
-        assert_eq!(results[0], InstructionName::put as u8);
-        assert_eq!(results[1], 7);
-        assert_eq!(results[2], 0);
-        assert_eq!(results[3], RegisterName::gp0 as u8);
+        assert_eq!(memory[0], InstructionName::put as u8);
+        assert_eq!(memory[1], 7);
+        assert_eq!(memory[2], 0);
+        assert_eq!(memory[3], RegisterName::gp0 as u8);
 
         // cp ans out
-        assert_eq!(results[4], InstructionName::cp as u8);
-        assert_eq!(results[5], RegisterName::ans as u8);
-        assert_eq!(results[6], RegisterName::out as u8);
-        assert_eq!(results[7], 0);
+        assert_eq!(memory[4], InstructionName::cp as u8);
+        assert_eq!(memory[5], RegisterName::ans as u8);
+        assert_eq!(memory[6], RegisterName::out as u8);
+        assert_eq!(memory[7], 0);
     }
 }
