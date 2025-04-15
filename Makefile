@@ -10,3 +10,5 @@ integration:
 		| grep 12 > /dev/null
 	(cargo run -- examples/fibonacci.s || true) 2>&1 \
 		| grep 17711 > /dev/null
+	cargo run -- examples/nophop.s 2>&1 \
+		| grep 20 > /dev/null

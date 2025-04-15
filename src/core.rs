@@ -175,6 +175,7 @@ impl<'tty, W: Write> Core<'tty, W> {
             Instruction::add(x, y) => self.add(x, y)?,
             Instruction::cp(src, dst) => self.cp(src, dst)?,
             Instruction::jmp(addr) => self.jmp(addr)?,
+            Instruction::nop => (),
             Instruction::put(val, dst) => self.put(val, dst)?,
         }
         let pc = self.register_file.read(RegisterName::pc);

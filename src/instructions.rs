@@ -11,6 +11,7 @@ pub enum InstructionName {
     add,
     cp,
     jmp,
+    nop,
     put,
 }
 
@@ -18,6 +19,7 @@ const HALT_ID: u8 = InstructionName::halt as u8;
 const ADD_ID: u8 = InstructionName::add as u8;
 const CP_ID: u8 = InstructionName::cp as u8;
 const JMP_ID: u8 = InstructionName::jmp as u8;
+const NOP_ID: u8 = InstructionName::nop as u8;
 const PUT_ID: u8 = InstructionName::put as u8;
 
 #[allow(non_camel_case_types)]
@@ -27,6 +29,7 @@ pub enum Instruction {
     add(RegisterName, RegisterName),
     cp(RegisterName, RegisterName),
     jmp(RegisterName),
+    nop,
     put(u16, RegisterName),
 }
 
@@ -61,6 +64,7 @@ impl Instruction {
                 let addr = RegisterName::try_from_str(p[1])?;
                 Ok(Instruction::jmp(addr))
             },
+            "nop" => Ok(Instruction::nop),
             "put" => {
                 let val: u16 = p[1].parse()?;
                 let dst = RegisterName::try_from_str(p[2])?;
@@ -84,6 +88,9 @@ impl Instruction {
             Instruction::jmp(addr) => {
                 u32::from_ne_bytes([JMP_ID,*addr as u8,0,0])
             },
+            Instruction::nop => {
+                u32::from_ne_bytes([NOP_ID,0,0,0])
+            }
             Instruction::put(val, dst) => {
                 let v = val.to_ne_bytes();
                 u32::from_ne_bytes([PUT_ID,v[0],v[1],*dst as u8])
@@ -110,6 +117,7 @@ impl Instruction {
                 let addr = RegisterName::try_from_u8(bytes[1])?;
                 Ok(Instruction::jmp(addr))
             },
+            NOP_ID => Ok(Instruction::nop),
             PUT_ID => {
                 let val = u16::from_ne_bytes([bytes[1],bytes[2]]);
                 let dst = RegisterName::try_from_u8(bytes[3])?;
@@ -148,6 +156,10 @@ mod tests {
     fn encode_instructions() {
         let pairs = vec![
             (
+                Instruction::halt,
+                u32::from_ne_bytes([InstructionName::halt as u8, 0, 0, 0])
+            ),
+            (
                 Instruction::add(RegisterName::gp2, RegisterName::gp1),
                 u32::from_ne_bytes([
                     InstructionName::add as u8,
@@ -166,8 +178,17 @@ mod tests {
                 ])
             ),
             (
-                Instruction::halt,
-                u32::from_ne_bytes([InstructionName::halt as u8, 0, 0, 0])
+                Instruction::jmp(RegisterName::gp7),
+                u32::from_ne_bytes([
+                    InstructionName::jmp as u8,
+                    RegisterName::gp7 as u8,
+                    0,
+                    0
+                ])
+            ),
+            (
+                Instruction::nop,
+                u32::from_ne_bytes([InstructionName::nop as u8, 0, 0, 0])
             ),
             (
                 Instruction::put(7, RegisterName::gp0),
@@ -189,6 +210,10 @@ mod tests {
     fn decode_instructions() {
         let pairs = vec![
             (
+                Instruction::halt,
+                u32::from_ne_bytes([HALT_ID,0,0,0])
+            ),
+            (
                 Instruction::add(RegisterName::gp2, RegisterName::gp1),
                 u32::from_ne_bytes([
                     ADD_ID,
@@ -207,8 +232,17 @@ mod tests {
                 ])
             ),
             (
-                Instruction::halt,
-                u32::from_ne_bytes([HALT_ID,0,0,0])
+                Instruction::jmp(RegisterName::gp7),
+                u32::from_ne_bytes([
+                    InstructionName::jmp as u8,
+                    RegisterName::gp7 as u8,
+                    0,
+                    0
+                ])
+            ),
+            (
+                Instruction::nop,
+                u32::from_ne_bytes([InstructionName::nop as u8, 0, 0, 0])
             ),
             (
                 Instruction::put(7, RegisterName::gp0),
