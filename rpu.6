@@ -67,7 +67,7 @@ Unplugs the power.
 Perhaps a bit impolite, but machines don't have feelings.
 .
 .\" jmp
-.It Ic \&jmp Ar dst
+.It Ic \&jmp Ar dst cond
 Normally, 
 .Nm
 will just execute the next instruction in the line.
@@ -79,7 +79,7 @@ will tell
 to begin executing instructions at the address contained in the
 .Ar dst
 register IF AND ONLY IF
-.Ic \&ans
+.Ar cond
 is zero.
 .
 .\" mul

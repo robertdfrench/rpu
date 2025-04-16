@@ -148,7 +148,9 @@ impl<'tty, W: Write> Core<'tty, W> {
         }
     }
 
-    fn jmp(&mut self, addr: RegisterName) -> Result<()> {
+    fn jmp(&mut self, addr: RegisterName, cond: RegisterName)
+        -> Result<()>
+    {
         let mut addr = self.register_file.read(addr);
         addr = addr - (addr % 4); // Align addr to 4n
         if addr > 0 {
@@ -157,8 +159,8 @@ impl<'tty, W: Write> Core<'tty, W> {
             // have the same behavior.
             addr = addr - 4;
         }
-        let ans = self.register_file.read(RegisterName::ans);
-        if ans == 0 {
+        let cond = self.register_file.read(cond);
+        if cond == 0 {
             self.register_file.write(RegisterName::pc, addr);
         }
         Ok(())
@@ -227,7 +229,7 @@ impl<'tty, W: Write> Core<'tty, W> {
             Instruction::halt => { return Ok(true) },
             Instruction::add(x, y) => self.add(x, y)?,
             Instruction::cp(src, dst) => self.cp(src, dst)?,
-            Instruction::jmp(addr) => self.jmp(addr)?,
+            Instruction::jmp(dst, cond) => self.jmp(dst, cond)?,
             Instruction::mul(x, y) => self.mul(x, y)?,
             Instruction::nop => (),
             Instruction::put(val, dst) => self.put(val, dst)?,

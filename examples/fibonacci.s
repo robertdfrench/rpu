@@ -14,4 +14,4 @@ cp  gp1 gp0
 cp  ans gp1
 add gp7 gp7
 put :LOOP   gp6
-jmp gp6
+jmp gp6 ans

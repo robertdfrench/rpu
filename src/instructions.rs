@@ -32,7 +32,7 @@ pub enum Instruction {
     halt,
     add(RegisterName, RegisterName),
     cp(RegisterName, RegisterName),
-    jmp(RegisterName),
+    jmp(RegisterName, RegisterName),
     mul(RegisterName, RegisterName),
     nop,
     put(u16, RegisterName),
@@ -71,7 +71,8 @@ impl Instruction {
             },
             "jmp" => {
                 let addr = RegisterName::try_from_str(p[1])?;
-                Ok(Instruction::jmp(addr))
+                let cond = RegisterName::try_from_str(p[2])?;
+                Ok(Instruction::jmp(addr, cond))
             },
             "mul" => {
                 let x = RegisterName::try_from_str(p[1])?;
@@ -104,8 +105,8 @@ impl Instruction {
             Instruction::cp(src, dst) => {
                 u32::from_ne_bytes([CP_ID,*src as u8,*dst as u8,0])
             },
-            Instruction::jmp(addr) => {
-                u32::from_ne_bytes([JMP_ID,*addr as u8,0,0])
+            Instruction::jmp(addr, cond) => {
+                u32::from_ne_bytes([JMP_ID,*addr as u8,*cond as u8,0])
             },
             Instruction::mul(x, y) => {
                 u32::from_ne_bytes([MUL_ID,*x as u8,*y as u8,0])
@@ -140,7 +141,8 @@ impl Instruction {
             },
             JMP_ID => {
                 let addr = RegisterName::try_from_u8(bytes[1])?;
-                Ok(Instruction::jmp(addr))
+                let cond = RegisterName::try_from_u8(bytes[2])?;
+                Ok(Instruction::jmp(addr, cond))
             },
             MUL_ID => {
                 let x = RegisterName::try_from_u8(bytes[1])?;
@@ -192,8 +194,11 @@ mod tests {
                 )
             ),
             (
-                "jmp gp2",
-                Instruction::jmp(RegisterName::gp2)
+                "jmp gp2 gp7",
+                Instruction::jmp(
+                    RegisterName::gp2,
+                    RegisterName::gp7
+                )
             ),
             (
                 "mul gp0 gp1",
@@ -261,11 +266,14 @@ mod tests {
                 ])
             ),
             (
-                Instruction::jmp(RegisterName::gp7),
+                Instruction::jmp(
+                    RegisterName::gp7,
+                    RegisterName::gp6
+                ),
                 u32::from_ne_bytes([
                     InstructionName::jmp as u8,
                     RegisterName::gp7 as u8,
-                    0,
+                    RegisterName::gp6 as u8,
                     0
                 ])
             ),
@@ -355,11 +363,14 @@ mod tests {
                 ])
             ),
             (
-                Instruction::jmp(RegisterName::gp7),
+                Instruction::jmp(
+                    RegisterName::gp7,
+                    RegisterName::gp6
+                ),
                 u32::from_ne_bytes([
                     InstructionName::jmp as u8,
                     RegisterName::gp7 as u8,
-                    0,
+                    RegisterName::gp6 as u8,
                     0
                 ])
             ),
