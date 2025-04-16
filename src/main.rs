@@ -9,10 +9,17 @@ fn main() -> Result<()> {
     let mut stdout = io::stdout();
     let mut pu = rpu::Core::new(&mut stdout);
 
+    let mut headless = false;
+
     for file in env::args().skip(1) {
+        headless = true;
         let source = fs::read_to_string(file)?;
         pu.load_source(&source)?;
         pu.start()?;
+    }
+
+    if !headless {
+        rpu::gui::main().unwrap()
     }
 
     Ok(())
