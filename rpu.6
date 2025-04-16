@@ -1,0 +1,116 @@
+.Dd $Mdocdate$
+.Dt RPU 6
+.Os "Your buddy Robert"
+.Sh NAME
+.Nm rpu
+.Nd Your buddy Robert's processing unit
+.Sh SYNOPSIS
+.Nm rpu
+.Ar
+.Sh DESCRIPTION
+The
+.Nm
+command loads your buddy Robert's processing unit.
+Give it a file name, and it will attempt to compile that file as
+an
+.Nm
+program and execute it.
+.Pp
+Your buddy Robert wrote
+.Nm
+to make it as easy as possible to learn sorta-kinda how
+computers work.
+The goal is more about getting a rough idea and less about
+building anything useful.
+.
+.
+.Sh INSTRUCTIONS
+.Nm
+contains only a few instructions:
+.
+.
+.Bl -tag -width 3n
+.
+.\" add
+.It Ic \&add Ar x y
+Adds the contents of register
+.Ar x
+and register
+.Ar y ,
+storing the answer in the
+.Ic \&ans
+register.
+This is your best bet for adding two numbers.
+(Note that
+.Nm
+can only count to 65,536, so it will throw a fit and exit if
+your sum is bigger than that.)
+.
+.\" cp
+.It Ic \&cp Ar src dst
+Copies the contents or the
+.Ar src
+register into the
+.Ar dst
+register.
+All of the bits from
+.Ar src
+are guaranteed to end up in
+.Ar dst
+or you will get a full refund!
+.
+.\" halt
+.It Ic \&halt
+Stops
+.Nm
+immediately.
+Unplugs the power.
+Perhaps a bit impolite, but machines don't have feelings.
+.
+.\" jmp
+.It Ic \&jmp Ar dst
+Normally, 
+.Nm
+will just execute the next instruction in the line.
+If you are impatient and want to jump line, this is the
+instruction for you!
+.Ic \&jmp
+will tell
+.Nm
+to begin executing instructions at the address contained in the
+.Ar dst
+register IF AND ONLY IF
+.Ic \&ans
+is zero.
+.
+.\" nop
+.It Ic \&nop
+Does nothing! Sometimes it's good to take a break.
+.
+.\" put
+.It Ic \&put Ms x Ar dst
+Places the literal number
+.Ms x
+into the register
+.Ar dst .
+If you need to hardcode some values into your program, this is
+the easiest way to get them into a register.
+.
+.\" sub
+.It Ic \&sub Ar x y
+Subtracts the value in register
+.Ar y
+from the value in register
+.Ar x
+and places the result in the
+.Ic \&ans
+register.
+You really can't find a better subtractor on the market, unless
+you want support for negative numbers.
+.Nm
+can't do negative numbers, so if
+.Ar x
+is bigger than
+.Ar y
+you are gonna be in trouble.
+.El
