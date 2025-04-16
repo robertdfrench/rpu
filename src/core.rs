@@ -24,7 +24,7 @@ pub enum ExecutionError {
     #[error("Cannot 'cp' to Register {0:?}")]
     CannotCpTo(RegisterName),
 
-    #[error("Cannot fit {0} + {1} into a register")]
+    #[error("Cannot fit {0}+{1} or {0}*{1} into a register")]
     Overflow(u16, u16),
 
     #[error("Cannot fit {0} - {1} into a register")]
@@ -164,6 +164,31 @@ impl<'tty, W: Write> Core<'tty, W> {
         Ok(())
     }
 
+    fn mul(&mut self, x: RegisterName, y: RegisterName)
+        -> Result<()>
+    {
+        let x: u16 = match x {
+            RegisterName::out => {
+                return Err(ExecutionError::CannotAdd(x).into());
+            },
+            _ => self.register_file.read(x)
+        };
+
+        let y: u16 = match y {
+            RegisterName::out => {
+                return Err(ExecutionError::CannotAdd(y).into());
+            },
+            _ => self.register_file.read(y)
+        };
+
+        let ans = x.checked_mul(y).ok_or(
+            ExecutionError::Overflow(x,y)
+        )?;
+        self.register_file.write(RegisterName::ans, ans);
+
+        Ok(())
+    }
+
     fn sub(&mut self, x: RegisterName, y: RegisterName)
         -> Result<()>
     {
@@ -203,6 +228,7 @@ impl<'tty, W: Write> Core<'tty, W> {
             Instruction::add(x, y) => self.add(x, y)?,
             Instruction::cp(src, dst) => self.cp(src, dst)?,
             Instruction::jmp(addr) => self.jmp(addr)?,
+            Instruction::mul(x, y) => self.mul(x, y)?,
             Instruction::nop => (),
             Instruction::put(val, dst) => self.put(val, dst)?,
             Instruction::sub(x, y) => self.sub(x, y)?,

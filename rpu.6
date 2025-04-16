@@ -82,6 +82,19 @@ register IF AND ONLY IF
 .Ic \&ans
 is zero.
 .
+.\" mul
+.It Ic \&mul Ar x y
+Multiply the contents of register
+.Ar x
+against register
+.Ar y ,
+and store the answer in
+.Ic \&ans .
+(Note that
+.Nm
+can only count to 65,536, so it will throw a fit and exit if
+your product is bigger than that.)
+.
 .\" nop
 .It Ic \&nop
 Does nothing! Sometimes it's good to take a break.
@@ -213,6 +226,17 @@ writing to
 will cause
 .Nm
 to become confused and throw in the towel.
+.
+.\" our
+.It Ic \&out
+Bytes written to this register are forwarded to the current
+device, as determined by the
+.Ic \&dvc
+register.
+It is write-only; attempting to read bytes from this register
+will confuse
+.Nm
+and cause it to exit in shame.
 .
 .\" pc
 .It Ic \&pc
