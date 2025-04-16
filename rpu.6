@@ -28,7 +28,6 @@ building anything useful.
 .Nm
 contains only a few instructions:
 .
-.
 .Bl -tag -width 3n
 .
 .\" add
@@ -113,4 +112,181 @@ can't do negative numbers, so if
 is bigger than
 .Ar y
 you are gonna be in trouble.
+.El
+.
+.
+.Sh REGISTERS
+Registers on the
+.Nm
+are either
+.Dq "special purpose"
+or
+.Dq "general purpose" .
+.
+.Pp
+The general purpose registers are yours to enjoy as you see fit.
+Unlike some other platforms, your buddy Robert's processing unit
+won't sneak shit into the general purpose registers in response
+to other instructions. Nor will instructions implicitly reserve
+general purpose registers, reading shit from them when you don't
+expect.
+.
+.Pp
+Special purpose registers are provided to you by your buddy
+Robert in order to facilitate some specific task. Sometimes
+their contents change in response to instructions, and some
+instructions do implicitly rely on their contents.
+.
+.Ss General Purpose Registers
+.Nm
+programs can access these 16-bit registers at any time, with no
+confusing implications. As an
+.Nm
+user, you are entitled to them without restriction.
+.
+.Bl -tag -width 3n
+.
+.\" gp0
+.It Ic \&gp0
+.Dq "First among equals"
+.
+.\" gp1
+.It Ic \&gp1
+.Dq "El Segundo"
+.
+.\" gp2
+.It Ic \&gp2
+.Dq "Sixteen wholesome bits"
+.
+.\" gp3
+.It Ic \&gp3
+.Dq "Sixteen bits, None the richer"
+.
+.\" gp4
+.It Ic \&gp4
+.Dq "Sweet Sixteen"
+.
+.\" gp5
+.It Ic \&gp5
+.Dq "Monday the 16th"
+.
+.\" gp6
+.It Ic \&gp6
+.Dq "PITHY_NAME_6"
+.
+.\" gp7
+.It Ic \&gp7
+.Dq "PITHY_NAME_7"
+.
+.El
+.
+.Ss Special Purpose Registers
+These registers have specific use-cases. They are not generally
+under the programmer's control or, when they are, may cause side
+effects to happen (such as printing to the console, changing the
+active device, etc).
+.
+.Bl -tag -width 3n
+.
+.\" ans
+.It Ic \&ans
+This read-only register holds the result (the "answer") of the
+most recent mathematical calculation. The
+.Ic \&add
+and
+.Ic \&sub
+instructions affect the value of this register.
+.
+.\" dvc
+.It Ic \&dvc
+This register is read-write, but it changes the active device.
+When
+.Nm
+boots, its value is 0, which means bytes copied to the
+.Ic \&out
+register will be written to the console.
+Writing a different number into this register will cause output
+bytes to be sent to the device associated with that number. If
+no device is associated with the contents of this register,
+writing to
+.Ic \&out
+will cause
+.Nm
+to become confused and throw in the towel.
+.
+.\" pc
+.It Ic \&pc
+The
+.Dq "Program Counter"
+contains the address of the instruction that will be executed
+next by the
+.Nm .
+This is a read-only register; the only way to change its
+contents is via the
+.Ic \&jmp
+instruction.
+.El
+.
+.
+.Sh EXAMPLES
+This machine is kinda weird, so a few example programs might
+help you get started.
+.
+.Ss Print 5 to the Console
+Put the number 5 into a register, then copy that register's
+value to the
+.Ic out 
+pseudo-register (so that it goes to the active device, which in
+this case is assumed to be the console).
+.Bd -literal -offset -indent
+
+put   5   gp0
+cp    gp0 out
+halt
+.Ed
+.
+.Ss Add 5 to 7 and Print
+Same as above, but we add the contents of two registers together
+and print the result before halting.
+.Bd -literal -offset -indent
+
+put 5   gp0
+put 7   gp1
+add gp0 gp1
+cp  ans out
+halt
+.Ed
+.
+.Ss The Fibonacci Sequence
+This example will print as much of the Fibonacci sequence as
+will fit in a 16-bit register, at which point
+.Nm
+will become confused and crash:
+.Bd -literal -offset -indent
+
+# Setup
+put 0   gp0
+put 1   gp1
+put 0   gp7
+
+# Print inital values
+cp  gp0 out
+cp  gp1 out
+
+# Main loop
+add gp0 gp1 :LOOP
+cp  ans out
+cp  gp1 gp0
+cp  ans gp1
+add gp7 gp7
+put :LOOP   gp6
+jmp gp6
+.Ed
+.
+.
+.Sh SEE ALSO
+.Bl -tag -width 3n
+.It Lk https://github.com/robertdfrench/rpu "Source Code"
+.It Lk https://store.steampowered.com/app/1444480/Turing_Complete/ "Turing Complete"
+.It Lk https://nostarch.com/foundationsofcomp "The Secret Life of Programs"
 .El
