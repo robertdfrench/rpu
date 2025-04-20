@@ -4,18 +4,18 @@ use thiserror::Error;
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct RegisterFile {
-    gp0: u16,
-    gp1: u16,
-    gp2: u16,
-    gp3: u16,
-    gp4: u16,
-    gp5: u16,
-    gp6: u16,
-    gp7: u16,
+    pub gp0: u16,
+    pub gp1: u16,
+    pub gp2: u16,
+    pub gp3: u16,
+    pub gp4: u16,
+    pub gp5: u16,
+    pub gp6: u16,
+    pub gp7: u16,
 
-    ans: u16,
-    dvc: u16,
-    pc:  u16,
+    pub ans: u16,
+    pub pc:  u16,
+    pub dvc: u16,
 }
 
 impl RegisterFile {

@@ -6,21 +6,28 @@ use std::fs;
 use std::io;
 
 fn main() -> Result<()> {
-    let mut stdout = io::stdout();
-    let mut pu = rpu::Core::new(&mut stdout);
+    let args: Vec<String> = env::args().collect();
+    match args.len() {
+        0 => Ok(()),
+        1 => Ok(()),
+        2 => {
+            let path = &args[1];
+            let source = fs::read_to_string(path)?;
 
-    let mut headless = false;
+            let mut stdout = io::stdout();
+            let mut pu = rpu::Core::new(&mut stdout);
 
-    for file in env::args().skip(1) {
-        headless = true;
-        let source = fs::read_to_string(file)?;
-        pu.load_source(&source)?;
-        pu.start()?;
+            pu.load_source(&source)?;
+            pu.start()?;
+
+            Ok(())
+        },
+        _ => {
+            // assume second arg is '--gui'
+            let path = &args[2];
+            let source = fs::read_to_string(path)?;
+            rpu::gui::main(path).unwrap();
+            Ok(())
+        }
     }
-
-    if !headless {
-        rpu::gui::main().unwrap()
-    }
-
-    Ok(())
 }

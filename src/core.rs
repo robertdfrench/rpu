@@ -32,7 +32,7 @@ pub enum ExecutionError {
 }
 
 pub struct Core<'tty, W: Write> {
-    register_file: RegisterFile,
+    pub register_file: RegisterFile,
     // Register File
     memory: [u8; 65_536],
     tty: &'tty mut W
@@ -216,7 +216,7 @@ impl<'tty, W: Write> Core<'tty, W> {
         Ok(())
     }
 
-    fn execute_single_instruction(&mut self) -> Result<bool> {
+    pub fn execute_single_instruction(&mut self) -> Result<bool> {
         let mut instr: [u8; 4] = [0; 4];
         let pc = self.register_file.read(RegisterName::pc);
         instr[0] = self.memory[(pc as usize) + 0];

@@ -1,276 +1,344 @@
-/// A Ratatui example that demonstrates how to create a todo list with selectable items.
-///
-/// This example runs with the Ratatui library code in the branch that you are currently
-/// reading. See the [`latest`] branch for the code which works with the most recent Ratatui
-/// release.
-///
-/// [`latest`]: https://github.com/ratatui/ratatui/tree/latest
-use color_eyre;
-use crossterm;
-use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use ratatui::buffer::Buffer;
-use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::palette::tailwind::{BLUE, GREEN, SLATE};
-use ratatui::style::{Color, Modifier, Style, Stylize};
-use ratatui::text::Line;
-use ratatui::widgets::{
-    Block, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph,
-    StatefulWidget, Widget, Wrap,
-};
-use ratatui::{symbols, DefaultTerminal};
+macro_rules! import {
+    [$($i:ident < $m:path),* $(,)?] => {
+        $(use $m::{$i};)*
+    };
+}
 
-const TODO_HEADER_STYLE: Style = Style::new().fg(SLATE.c100).bg(BLUE.c800);
-const NORMAL_ROW_BG: Color = SLATE.c950;
-const ALT_ROW_BG_COLOR: Color = SLATE.c900;
-const SELECTED_STYLE: Style = Style::new().bg(SLATE.c800).add_modifier(Modifier::BOLD);
-const TEXT_FG_COLOR: Color = SLATE.c200;
-const COMPLETED_TEXT_FG_COLOR: Color = GREEN.c500;
+import![
+    Block < ratatui::widgets,
+    Borders < ratatui::widgets,
+    Color < ratatui::style,
+    Core < crate::core,
+    Constraint < ratatui::layout,
+    DefaultTerminal < ratatui,
+    Direction < ratatui::layout,
+    Event < crossterm::event,
+    Frame < ratatui,
+    Layout < ratatui::layout,
+    Paragraph < ratatui::widgets,
+    Rect < ratatui::layout,
+    Result < color_eyre,
+    Row < ratatui::widgets,
+    Style < ratatui::style,
+    Stylize < ratatui::style,
+    Table < ratatui::widgets,
+    Write < std::io,
+    event < crossterm,
+    fs < std,
+];
 
-pub fn main() -> Result<()> {
+fn run<'tty,W: Write>(
+    mut terminal: DefaultTerminal,
+    mut app: App<'tty, W>,
+) -> Result<()> {
+    loop {
+        terminal.draw(|f| { render(&app,f); })?;
+        if matches!(event::read()?, Event::Key(_)) {
+            match app.core.execute_single_instruction() {
+                Ok(false) => { continue; },
+                Ok(true) => { break Ok(()) },
+                Err(e) => { eprintln!("{e}"); break Ok(()); }
+            }
+        }
+    }
+}
+
+pub fn main(path: &str) -> Result<()> {
+    let source = fs::read_to_string(path)?;
+    let mut printer: Vec<u8> = vec![];
+    let mut core = Core::new(&mut printer);
+    core.load_source(&source).unwrap();
+
+
     color_eyre::install()?;
     let terminal = ratatui::init();
-    let app_result = App::default().run(terminal);
+    let app = App::new(core);
+    let result = run(terminal, app);
     ratatui::restore();
-    app_result
+    result
 }
 
-/// This struct holds the current state of the app. In particular, it has the `todo_list` field
-/// which is a wrapper around `ListState`. Keeping track of the state lets us render the
-/// associated widget with its state and have access to features such as natural scrolling.
-///
-/// Check the event handling at the bottom to see how to change the state on incoming events. Check
-/// the drawing logic for items on how to specify the highlighting style for selected items.
-struct App {
-    should_exit: bool,
-    todo_list: TodoList,
+struct App<'tty, W: Write> {
+    core: Core<'tty,W>,
+    code: String,
+    memory: [u16; 65_536],
+    lcd0: u16,
+    lcd1: u16,
+    out: u16,
 }
 
-struct TodoList {
-    items: Vec<TodoItem>,
-    state: ListState,
-}
-
-#[derive(Debug)]
-struct TodoItem {
-    todo: String,
-    info: String,
-    status: Status,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum Status {
-    Todo,
-    Completed,
-}
-
-impl Default for App {
-    fn default() -> Self {
+impl<'tty, W:Write> App<'tty, W> {
+    fn new(core: Core<'tty,W>) -> Self {
+        let code = String::from("nop\nput 17 gp1\nadd gp1 gp1\ncp ans out");
+        let memory = [4096; 65_536];
+        let lcd0: u16 = 65_432;
+        let lcd1: u16 = 01_234;
+        let out: u16 = 47;
         Self {
-            should_exit: false,
-            todo_list: TodoList::from_iter([
-                (Status::Todo, "Rewrite everything with Rust!", "I can't hold my inner voice. He tells me to rewrite the complete universe with Rust"),
-                (Status::Completed, "Rewrite all of your tui apps with Ratatui", "Yes, you heard that right. Go and replace your tui with Ratatui."),
-                (Status::Todo, "Pet your cat", "Minnak loves to be pet by you! Don't forget to pet and give some treats!"),
-                (Status::Todo, "Walk with your dog", "Max is bored, go walk with him!"),
-                (Status::Completed, "Pay the bills", "Pay the train subscription!!!"),
-                (Status::Completed, "Refactor list example", "If you see this info that means I completed this task!"),
-            ]),
+            core,
+            code, memory,
+            out, lcd0, lcd1
         }
     }
 }
 
-impl FromIterator<(Status, &'static str, &'static str)> for TodoList {
-    fn from_iter<I: IntoIterator<Item = (Status, &'static str, &'static str)>>(iter: I) -> Self {
-        let items = iter
-            .into_iter()
-            .map(|(status, todo, info)| TodoItem::new(status, todo, info))
-            .collect();
-        let state = ListState::default();
-        Self { items, state }
-    }
+struct Layouts {
+    code: Rect,
+    lcd0: Rect,
+    lcd1: Rect,
+    memory: Rect,
+    registers: Rect,
+    special_registers: Rect,
+    printer: Rect,
 }
 
-impl TodoItem {
-    fn new(status: Status, todo: &str, info: &str) -> Self {
+impl Layouts {
+    fn new(frame: &Frame) -> Self {
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![
+                Constraint::Percentage(100),
+                Constraint::Min(31),
+                Constraint::Min(55),
+            ])
+            .split(frame.area());
+        let code = layout[0];
+
+        let devices_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![
+                Constraint::Length(7),
+                Constraint::Length(7),
+                Constraint::Fill(1),
+            ])
+            .split(layout[1]);
+        let lcd0 = devices_layout[0];
+        let lcd1 = devices_layout[1];
+        let printer = devices_layout[2];
+
+        let tools_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![
+                Constraint::Length(4),
+                Constraint::Length(4),
+                Constraint::Fill(1),
+            ])
+            .split(layout[2]);
+        let registers = tools_layout[0];
+        let special_registers = tools_layout[1];
+        let memory = tools_layout[2];
+
         Self {
-            status,
-            todo: todo.to_string(),
-            info: info.to_string(),
+            code,
+            lcd0,
+            lcd1,
+            memory,
+            registers, 
+            special_registers,
+            printer,
         }
     }
 }
 
-impl App {
-    fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        while !self.should_exit {
-            terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
-            if let Event::Key(key) = event::read()? {
-                self.handle_key(key);
-            }
-        }
-        Ok(())
-    }
+fn render<'tty, W: Write>(app: &'tty App<W>, frame: &mut Frame) {
+    let layouts = Layouts::new(frame);
 
-    fn handle_key(&mut self, key: KeyEvent) {
-        if key.kind != KeyEventKind::Press {
-            return;
-        }
-        match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => self.should_exit = true,
-            KeyCode::Char('h') | KeyCode::Left => self.select_none(),
-            KeyCode::Char('j') | KeyCode::Down => self.select_next(),
-            KeyCode::Char('k') | KeyCode::Up => self.select_previous(),
-            KeyCode::Char('g') | KeyCode::Home => self.select_first(),
-            KeyCode::Char('G') | KeyCode::End => self.select_last(),
-            KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => {
-                self.toggle_status();
-            }
-            _ => {}
-        }
-    }
 
-    fn select_none(&mut self) {
-        self.todo_list.state.select(None);
-    }
+    render_code(&app.code, layouts.code, frame, "Code");
+    render_lcd(app.lcd0, layouts.lcd0, frame, "LCD0 (dvc 0)");
+    render_lcd(app.lcd1, layouts.lcd1, frame, "LCD1 (dvc 1)");
+    render_printer("text", layouts.printer, frame, "Printer (dvc 2)");
 
-    fn select_next(&mut self) {
-        self.todo_list.state.select_next();
-    }
-    fn select_previous(&mut self) {
-        self.todo_list.state.select_previous();
-    }
+    let gp_registers = vec![
+        ("gp0", app.core.register_file.gp0),
+        ("gp1", app.core.register_file.gp1),
+        ("gp2", app.core.register_file.gp2),
+        ("gp3", app.core.register_file.gp3),
+        ("gp4", app.core.register_file.gp4),
+        ("gp5", app.core.register_file.gp5),
+        ("gp6", app.core.register_file.gp6),
+        ("gp7", app.core.register_file.gp7),
+    ];
+    render_registers(
+        gp_registers,
+        layouts.registers, 
+        frame,
+        "General Purpose Registers"
+    );
 
-    fn select_first(&mut self) {
-        self.todo_list.state.select_first();
-    }
 
-    fn select_last(&mut self) {
-        self.todo_list.state.select_last();
-    }
+    let sp_registers = vec![
+        ("ans", app.core.register_file.ans),
+        ("out", app.out),
+        ("dvc", app.core.register_file.dvc),
+        ("pc", app.core.register_file.pc),
+    ];
+    render_registers(
+        sp_registers,
+        layouts.special_registers,
+        frame,
+        "Special Purpose Registers"
+    );
 
-    /// Changes the status of the selected list item
-    fn toggle_status(&mut self) {
-        if let Some(i) = self.todo_list.state.selected() {
-            self.todo_list.items[i].status = match self.todo_list.items[i].status {
-                Status::Completed => Status::Todo,
-                Status::Todo => Status::Completed,
-            }
-        }
-    }
+
+    // Memory
+    render_memory(&app.memory, layouts.memory, frame, "Memory");
 }
 
-impl Widget for &mut App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let [header_area, main_area, footer_area] = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Fill(1),
-            Constraint::Length(1),
-        ])
-        .areas(area);
-
-        let [list_area, item_area] =
-            Layout::vertical([Constraint::Fill(1), Constraint::Fill(1)]).areas(main_area);
-
-        App::render_header(header_area, buf);
-        App::render_footer(footer_area, buf);
-        self.render_list(list_area, buf);
-        self.render_selected_item(item_area, buf);
-    }
+fn render_code(
+    code: &str,
+    area: Rect, 
+    frame: &mut Frame,
+    title: &str,
+) {
+    let paragraph = Paragraph::new(code)
+        .block(common_block(title));
+    frame.render_widget(paragraph, area);
 }
 
-/// Rendering logic for the app
-impl App {
-    fn render_header(area: Rect, buf: &mut Buffer) {
-        Paragraph::new("Ratatui Todo List Example")
-            .bold()
-            .centered()
-            .render(area, buf);
+
+fn render_lcd(
+    value: u16,
+    area: Rect,
+    frame: &mut Frame,
+    title: &str
+) {
+    let font_definition = include_str!("../lcd_font.txt");
+    let mut lcd_font: Vec<Vec<&str>> = vec![];
+    let mut current_lcd_char: Vec<&str> = vec![];
+    for (n, text) in font_definition.lines().enumerate() {
+        current_lcd_char.push(text);
+        if ((n + 1) % 5) == 0 {
+            lcd_font.push(current_lcd_char);
+            current_lcd_char = vec![];
+        }
     }
 
-    fn render_footer(area: Rect, buf: &mut Buffer) {
-        Paragraph::new("Use ↓↑ to move, ← to unselect, → to change status, g/G to go top/bottom.")
-            .centered()
-            .render(area, buf);
+    let value = format!("{:0>5}", value);
+    let mut content = String::new();
+    for row in 0..5 {
+        for c in value.chars() {
+            let char_id = match c {
+                '0' => 0,
+                '1' => 1,
+                '2' => 2,
+                '3' => 3,
+                '4' => 4,
+                '5' => 5,
+                '6' => 6,
+                '7' => 7,
+                '8' => 8,
+                '9' => 9,
+                _ => panic!()
+            };
+
+            content.push_str(lcd_font[char_id][row]);
+        }
+        content.push_str("\n");
     }
 
-    fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
-        let block = Block::new()
-            .title(Line::raw("TODO List").centered())
-            .borders(Borders::TOP)
-            .border_set(symbols::border::EMPTY)
-            .border_style(TODO_HEADER_STYLE)
-            .bg(NORMAL_ROW_BG);
-
-        // Iterate through all elements in the `items` and stylize them.
-        let items: Vec<ListItem> = self
-            .todo_list
-            .items
-            .iter()
-            .enumerate()
-            .map(|(i, todo_item)| {
-                let color = alternate_colors(i);
-                ListItem::from(todo_item).bg(color)
-            })
-            .collect();
-
-        // Create a List from all list items and highlight the currently selected one
-        let list = List::new(items)
-            .block(block)
-            .highlight_style(SELECTED_STYLE)
-            .highlight_symbol(">")
-            .highlight_spacing(HighlightSpacing::Always);
-
-        // We need to disambiguate this trait method as both `Widget` and `StatefulWidget` share the
-        // same method name `render`.
-        StatefulWidget::render(list, area, buf, &mut self.todo_list.state);
-    }
-
-    fn render_selected_item(&self, area: Rect, buf: &mut Buffer) {
-        // We get the info depending on the item's state.
-        let info = if let Some(i) = self.todo_list.state.selected() {
-            match self.todo_list.items[i].status {
-                Status::Completed => format!("✓ DONE: {}", self.todo_list.items[i].info),
-                Status::Todo => format!("☐ TODO: {}", self.todo_list.items[i].info),
-            }
-        } else {
-            "Nothing selected...".to_string()
-        };
-
-        // We show the list item's info under the list in this paragraph
-        let block = Block::new()
-            .title(Line::raw("TODO Info").centered())
-            .borders(Borders::TOP)
-            .border_set(symbols::border::EMPTY)
-            .border_style(TODO_HEADER_STYLE)
-            .bg(NORMAL_ROW_BG)
-            .padding(Padding::horizontal(1));
-
-        // We can now render the item info
-        Paragraph::new(info)
-            .block(block)
-            .fg(TEXT_FG_COLOR)
-            .wrap(Wrap { trim: false })
-            .render(area, buf);
-    }
+    let paragraph = Paragraph::new(content)
+        .block(common_block(title));
+    frame.render_widget(paragraph, area);
 }
 
-const fn alternate_colors(i: usize) -> Color {
-    if i % 2 == 0 {
-        NORMAL_ROW_BG
-    } else {
-        ALT_ROW_BG_COLOR
-    }
+fn render_printer(
+    text: &str,
+    area: Rect,
+    frame: &mut Frame,
+    title: &str
+) {
+    let paragraph = Paragraph::new(text.to_string())
+        .block(common_block(title));
+    frame.render_widget(paragraph, area);
 }
 
-impl From<&TodoItem> for ListItem<'_> {
-    fn from(value: &TodoItem) -> Self {
-        let line = match value.status {
-            Status::Todo => Line::styled(format!(" ☐ {}", value.todo), TEXT_FG_COLOR),
-            Status::Completed => {
-                Line::styled(format!(" ✓ {}", value.todo), COMPLETED_TEXT_FG_COLOR)
-            }
-        };
-        ListItem::new(line)
+fn render_registers(
+    pairs: Vec<(&str, u16)>,
+    area: Rect,
+    frame: &mut Frame,
+    title: &str
+) {
+    let cells: Vec<String> = (&pairs).into_iter().map(|(_, val)| {
+        format!("{:5}", val)
+    }).collect();
+    let rows = [Row::new(cells)];
+    let widths: Vec<Constraint> = (&pairs).into_iter().map(|_| {
+        Constraint::Length(5)
+    }).collect();
+    let block = common_block(title);
+    let header_cells: Vec<String> = (&pairs).into_iter().map(|(name, _)| {
+        format!("{:>5}", name)
+    }).collect();
+    let header = Row::new(header_cells)
+        .style(Style::new().bold());
+    let table = Table::new(rows, widths)
+        .column_spacing(1)
+        .header(header)
+        .block(block);
+    frame.render_widget(table, area);
+}
+
+fn render_memory(
+    memory: &[u16; 65_536],
+    area: Rect,
+    frame: &mut Frame,
+    title: &str,
+) {
+    let mut rows: Vec<Row> = vec![];
+    let mut current_row: Vec<String> = vec![];
+    current_row.push(String::from("    0"));
+    for (addr, byte) in memory.iter().enumerate() {
+        current_row.push(format!("{:5}", byte));
+        if (addr + 1) % 8 == 0 {
+            let style = match (addr / 8) % 2 == 0 {
+                true => Style::default().bg(Color::Gray),
+                false => Style::default().bg(Color::White),
+            };
+            rows.push(
+                Row::new(current_row).style(style)
+            );
+            current_row = vec![];
+            current_row.push(format!("{:>5}", addr+1));
+        }
     }
+    let widths = [
+        Constraint::Length(5),
+        Constraint::Length(5),
+        Constraint::Length(5),
+        Constraint::Length(5),
+        Constraint::Length(5),
+        Constraint::Length(5),
+        Constraint::Length(5),
+        Constraint::Length(5),
+        Constraint::Length(5),
+    ];
+    let table = Table::new(rows, widths)
+        .column_spacing(1)
+        .header(
+            Row::new(vec![
+                "ADDR ",
+                "   +0",
+                "   +1",
+                "   +2",
+                "   +3",
+                "   +4",
+                "   +5",
+                "   +6",
+                "   +7",
+            ])
+                .style(Style::new().bold())
+                .bottom_margin(1)
+        )
+        .highlight_symbol(">>")
+        .block( common_block(title));
+    frame.render_widget(table, area);
+
+}
+
+fn common_block(title: &str) -> Block {
+    Block::new()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::new().blue())
 }
