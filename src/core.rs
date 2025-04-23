@@ -1,4 +1,3 @@
-use std::io::Write;
 use crate::instructions::Instruction;
 use crate::registers::RegisterName;
 use crate::registers::RegisterFile;
@@ -31,26 +30,26 @@ pub enum ExecutionError {
     Underflow(u16, u16),
 }
 
-pub struct Core<'tty, W: Write> {
+pub struct Core {
     pub register_file: RegisterFile,
     // Register File
-    memory: [u8; 65_536],
-    tty: &'tty mut W
+    pub memory: [u8; 65_536],
+    pub tty: String
 }
 
-impl<'tty, W: Write> Core<'tty, W> {
-    pub fn new(tty: &'tty mut W) -> Self {
+impl Core {
+    pub fn new() -> Self {
         let register_file = RegisterFile::new();
         let memory = [0; 65_536];
+        let tty = String::new();
 
         Self { register_file, memory, tty }
     }
 
     fn write_tty(&mut self, byte: u16) -> Result<()> {
-        match writeln!(self.tty, "{byte}") {
-            Ok(()) => Ok(()),
-            Err(e) => Err(e.into())
-        }
+        let byte = String::from_utf16_lossy(&[byte]);
+        self.tty.push_str(&byte);
+        Ok(())
     }
 
     fn load_program(&mut self, program: Program) -> Result<()> {
@@ -118,7 +117,12 @@ impl<'tty, W: Write> Core<'tty, W> {
         Ok(())
     }
 
-    fn cp(&mut self, src: RegisterName, dst: RegisterName)
+    fn cp(&mut self,
+        src: RegisterName,
+        dst: RegisterName,
+        lcd0: &mut u16,
+        lcd1: &mut u16,
+    )
         -> Result<()>
     {
         let val = match src {
@@ -138,7 +142,11 @@ impl<'tty, W: Write> Core<'tty, W> {
                 ExecutionError::CannotCpTo(dst).into()
             ), 
             RegisterName::out => {
-                self.write_tty(val)?;
+                match self.register_file.dvc {
+                    0 => { *lcd0 = val; },
+                    1 => { *lcd1 = val; },
+                    _ => { self.write_tty(val)?; },
+                }
                 Ok(())
             },
             _ => {
@@ -216,7 +224,11 @@ impl<'tty, W: Write> Core<'tty, W> {
         Ok(())
     }
 
-    pub fn execute_single_instruction(&mut self) -> Result<bool> {
+    pub fn execute_single_instruction(
+        &mut self,
+        lcd0: &mut u16,
+        lcd1: &mut u16,
+    ) -> Result<bool> {
         let mut instr: [u8; 4] = [0; 4];
         let pc = self.register_file.read(RegisterName::pc);
         instr[0] = self.memory[(pc as usize) + 0];
@@ -228,7 +240,7 @@ impl<'tty, W: Write> Core<'tty, W> {
         match instr {
             Instruction::halt => { return Ok(true) },
             Instruction::add(x, y) => self.add(x, y)?,
-            Instruction::cp(src, dst) => self.cp(src, dst)?,
+            Instruction::cp(src, dst) => self.cp(src, dst, lcd0, lcd1)?,
             Instruction::jmp(dst, cond) => self.jmp(dst, cond)?,
             Instruction::mul(x, y) => self.mul(x, y)?,
             Instruction::nop => (),
@@ -239,21 +251,6 @@ impl<'tty, W: Write> Core<'tty, W> {
         self.register_file.write(RegisterName::pc, pc + 4);
         Ok(false)
     }
-
-    pub fn start(&mut self) -> Result<()> {
-        self.register_file.write(RegisterName::pc, 0);
-        loop {
-            match self.execute_single_instruction() {
-                Err(e) => { return Err(e); },
-                Ok(halt) => {
-                    if halt {
-                        break;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -263,19 +260,14 @@ mod tests {
 
     #[test]
     fn test_tty() {
-        let mut buffer: Vec<u8> = vec![];
-
-        let mut pu = Core::new(&mut buffer);
-        pu.write_tty(7).unwrap();
-        let actual = String::from_utf8(buffer).unwrap();
-        assert_eq!(&actual, "7\n");
+        let mut core = Core::new();
+        core.write_tty(55).unwrap();
+        assert_eq!(&core.tty, "7");
     }
 
     #[test]
     fn test_loading() {
-        let mut _buffer: Vec<u8> = vec![];
-
-        let mut pu = Core::new(&mut _buffer);
+        let mut pu = Core::new();
 
         let source = [
             "put 7 gp0",

@@ -13,6 +13,7 @@ import![
     DefaultTerminal < ratatui,
     Direction < ratatui::layout,
     Event < crossterm::event,
+    KeyCode < crossterm::event,
     Frame < ratatui,
     Layout < ratatui::layout,
     Paragraph < ratatui::widgets,
@@ -22,62 +23,65 @@ import![
     Style < ratatui::style,
     Stylize < ratatui::style,
     Table < ratatui::widgets,
-    Write < std::io,
     event < crossterm,
     fs < std,
 ];
 
-fn run<'tty,W: Write>(
+fn run(
     mut terminal: DefaultTerminal,
-    mut app: App<'tty, W>,
+    mut computer: Computer,
 ) -> Result<()> {
     loop {
-        terminal.draw(|f| { render(&app,f); })?;
-        if matches!(event::read()?, Event::Key(_)) {
-            match app.core.execute_single_instruction() {
-                Ok(false) => { continue; },
-                Ok(true) => { break Ok(()) },
-                Err(e) => { eprintln!("{e}"); break Ok(()); }
-            }
+        terminal.draw(|f| { render(&computer,f); })?;
+        match event::read()? {
+            Event::Key(ke) => {  
+                match ke.code {
+                    KeyCode::Esc => { break Ok(()) },
+                    _ => match computer.core.execute_single_instruction(
+                            &mut computer.lcd0,
+                            &mut computer.lcd1,
+                        ) {
+                            Ok(false) => { continue; },
+                            Ok(true) => { break Ok(()) },
+                            Err(e) => { eprintln!("{e}"); break Ok(()); }
+                        },
+                }
+            },
+            _ => {}
         }
     }
 }
 
 pub fn main(path: &str) -> Result<()> {
     let source = fs::read_to_string(path)?;
-    let mut printer: Vec<u8> = vec![];
-    let mut core = Core::new(&mut printer);
+    let mut core = Core::new();
     core.load_source(&source).unwrap();
 
 
     color_eyre::install()?;
     let terminal = ratatui::init();
-    let app = App::new(core);
-    let result = run(terminal, app);
+    let computer = Computer::new(core, &source);
+    let result = run(terminal, computer);
     ratatui::restore();
     result
 }
 
-struct App<'tty, W: Write> {
-    core: Core<'tty,W>,
+struct Computer {
+    core: Core,
     code: String,
-    memory: [u16; 65_536],
     lcd0: u16,
     lcd1: u16,
-    out: u16,
 }
 
-impl<'tty, W:Write> App<'tty, W> {
-    fn new(core: Core<'tty,W>) -> Self {
-        let code = String::from("nop\nput 17 gp1\nadd gp1 gp1\ncp ans out");
-        let memory = [4096; 65_536];
-        let lcd0: u16 = 65_432;
-        let lcd1: u16 = 01_234;
-        let out: u16 = 47;
+impl Computer {
+    fn new(core: Core, source: &str) -> Self {
+        let code = String::from(source);
+        let lcd0: u16 = 0;
+        let lcd1: u16 = 0;
         Self {
             core,
-            code, memory,
-            out, lcd0, lcd1
+            code,
+            lcd0, lcd1
         }
     }
 }
@@ -140,24 +144,24 @@ impl Layouts {
     }
 }
 
-fn render<'tty, W: Write>(app: &'tty App<W>, frame: &mut Frame) {
+fn render(computer: &Computer, frame: &mut Frame) {
     let layouts = Layouts::new(frame);
 
 
-    render_code(&app.code, layouts.code, frame, "Code");
-    render_lcd(app.lcd0, layouts.lcd0, frame, "LCD0 (dvc 0)");
-    render_lcd(app.lcd1, layouts.lcd1, frame, "LCD1 (dvc 1)");
-    render_printer("text", layouts.printer, frame, "Printer (dvc 2)");
+    render_code(&computer.code, layouts.code, frame, "Code");
+    render_lcd(computer.lcd0, layouts.lcd0, frame, "LCD0 (dvc 0)");
+    render_lcd(computer.lcd1, layouts.lcd1, frame, "LCD1 (dvc 1)");
+    render_printer(&computer.core.tty, layouts.printer, frame, "Printer (dvc 2)");
 
     let gp_registers = vec![
-        ("gp0", app.core.register_file.gp0),
-        ("gp1", app.core.register_file.gp1),
-        ("gp2", app.core.register_file.gp2),
-        ("gp3", app.core.register_file.gp3),
-        ("gp4", app.core.register_file.gp4),
-        ("gp5", app.core.register_file.gp5),
-        ("gp6", app.core.register_file.gp6),
-        ("gp7", app.core.register_file.gp7),
+        ("gp0", computer.core.register_file.gp0),
+        ("gp1", computer.core.register_file.gp1),
+        ("gp2", computer.core.register_file.gp2),
+        ("gp3", computer.core.register_file.gp3),
+        ("gp4", computer.core.register_file.gp4),
+        ("gp5", computer.core.register_file.gp5),
+        ("gp6", computer.core.register_file.gp6),
+        ("gp7", computer.core.register_file.gp7),
     ];
     render_registers(
         gp_registers,
@@ -168,10 +172,9 @@ fn render<'tty, W: Write>(app: &'tty App<W>, frame: &mut Frame) {
 
 
     let sp_registers = vec![
-        ("ans", app.core.register_file.ans),
-        ("out", app.out),
-        ("dvc", app.core.register_file.dvc),
-        ("pc", app.core.register_file.pc),
+        ("ans", computer.core.register_file.ans),
+        ("dvc", computer.core.register_file.dvc),
+        ("pc", computer.core.register_file.pc),
     ];
     render_registers(
         sp_registers,
@@ -182,7 +185,7 @@ fn render<'tty, W: Write>(app: &'tty App<W>, frame: &mut Frame) {
 
 
     // Memory
-    render_memory(&app.memory, layouts.memory, frame, "Memory");
+    render_memory(&computer.core.memory, layouts.memory, frame, "Memory");
 }
 
 fn render_code(
@@ -237,7 +240,7 @@ fn render_lcd(
         content.push_str("\n");
     }
 
-    let paragraph = Paragraph::new(content)
+    let paragraph = Paragraph::new(content).bold()
         .block(common_block(title));
     frame.render_widget(paragraph, area);
 }
@@ -280,7 +283,7 @@ fn render_registers(
 }
 
 fn render_memory(
-    memory: &[u16; 65_536],
+    memory: &[u8; 65_536],
     area: Rect,
     frame: &mut Frame,
     title: &str,
