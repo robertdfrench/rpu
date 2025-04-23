@@ -105,7 +105,7 @@ mod tests {
             "put 7 gp0",
             "put 5 gp1",
             "add gp1 gp0",
-            "cp ans out"
+            "copy ans out"
         ];
         let source = source.join("\n");
 
@@ -121,7 +121,7 @@ mod tests {
             "put 5 gp1",
             "# add the values",
             "add gp1 gp0",
-            "cp ans out"
+            "copy ans out"
         ];
         let source = source.join("\n");
 
@@ -137,7 +137,7 @@ mod tests {
             "put 5 gp1",
             "",
             "add gp1 gp0",
-            "cp ans out"
+            "copy ans out"
         ];
         let source = source.join("\n");
 
@@ -150,7 +150,7 @@ mod tests {
     fn test_address_replacement() {
         let source = [
             "put 7 gp0",
-            "cp ans out :LABEL",
+            "copy ans out :LABEL",
             "put :LABEL gp1",
         ];
         let source = source.join("\n");
@@ -167,8 +167,8 @@ mod tests {
         assert_eq!(memory[2], 0);
         assert_eq!(memory[3], RegisterName::gp0 as u8);
 
-        // cp ans out
-        assert_eq!(memory[4], InstructionName::cp as u8);
+        // copy ans out
+        assert_eq!(memory[4], InstructionName::copy as u8);
         assert_eq!(memory[5], RegisterName::ans as u8);
         assert_eq!(memory[6], RegisterName::out as u8);
         assert_eq!(memory[7], 0);
@@ -184,7 +184,7 @@ mod tests {
     fn test_iterator() {
         let source = [
             "put 7 gp0",
-            "cp ans out"
+            "copy ans out"
         ];
         let source = source.join("\n");
         let program = Program::try_compile(&source).unwrap();
@@ -200,8 +200,8 @@ mod tests {
         assert_eq!(memory[2], 0);
         assert_eq!(memory[3], RegisterName::gp0 as u8);
 
-        // cp ans out
-        assert_eq!(memory[4], InstructionName::cp as u8);
+        // copy ans out
+        assert_eq!(memory[4], InstructionName::copy as u8);
         assert_eq!(memory[5], RegisterName::ans as u8);
         assert_eq!(memory[6], RegisterName::out as u8);
         assert_eq!(memory[7], 0);

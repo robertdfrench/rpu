@@ -17,10 +17,10 @@ pub enum ExecutionError {
     #[error("Cannot 'add' from Register {0:?}")]
     CannotAdd(RegisterName),
 
-    #[error("Cannot 'cp' from Register {0:?}")]
+    #[error("Cannot 'copy' from Register {0:?}")]
     CannotCpFrom(RegisterName),
 
-    #[error("Cannot 'cp' to Register {0:?}")]
+    #[error("Cannot 'copy' to Register {0:?}")]
     CannotCpTo(RegisterName),
 
     #[error("Cannot fit {0}+{1} or {0}*{1} into a register")]
@@ -117,7 +117,7 @@ impl Core {
         Ok(())
     }
 
-    fn cp(&mut self,
+    fn copy(&mut self,
         src: RegisterName,
         dst: RegisterName,
         lcd0: &mut u16,
@@ -156,14 +156,14 @@ impl Core {
         }
     }
 
-    fn jmp(&mut self, addr: RegisterName, cond: RegisterName)
+    fn jump(&mut self, addr: RegisterName, cond: RegisterName)
         -> Result<()>
     {
         let mut addr = self.register_file.read(addr);
         addr = addr - (addr % 4); // Align addr to 4n
         if addr > 0 {
             // Back up to previous address unless that would go
-            // negative. This means that `jmp 4` and `jmp 0`
+            // negative. This means that `jump 4` and `jump 0`
             // have the same behavior.
             addr = addr - 4;
         }
@@ -240,10 +240,10 @@ impl Core {
         match instr {
             Instruction::halt => { return Ok(true) },
             Instruction::add(x, y) => self.add(x, y)?,
-            Instruction::cp(src, dst) => self.cp(src, dst, lcd0, lcd1)?,
-            Instruction::jmp(dst, cond) => self.jmp(dst, cond)?,
+            Instruction::copy(src, dst) => self.copy(src, dst, lcd0, lcd1)?,
+            Instruction::jump(dst, cond) => self.jump(dst, cond)?,
             Instruction::mul(x, y) => self.mul(x, y)?,
-            Instruction::nop => (),
+            Instruction::noop => (),
             Instruction::put(val, dst) => self.put(val, dst)?,
             Instruction::sub(x, y) => self.sub(x, y)?,
         }
@@ -271,7 +271,7 @@ mod tests {
 
         let source = [
             "put 7 gp0",
-            "cp ans out"
+            "copy ans out"
         ];
         let source = source.join("\n");
         let program = Program::try_compile(&source).unwrap();
@@ -284,8 +284,8 @@ mod tests {
         assert_eq!(pu.memory[2], 0);
         assert_eq!(pu.memory[3], RegisterName::gp0 as u8);
 
-        // cp ans out
-        assert_eq!(pu.memory[4], InstructionName::cp as u8);
+        // copy ans out
+        assert_eq!(pu.memory[4], InstructionName::copy as u8);
         assert_eq!(pu.memory[5], RegisterName::ans as u8);
         assert_eq!(pu.memory[6], RegisterName::out as u8);
         assert_eq!(pu.memory[7], 0);

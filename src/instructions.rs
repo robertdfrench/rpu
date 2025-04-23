@@ -9,20 +9,20 @@ pub enum InstructionName {
     // This must come first so that "0" instrs halt the machine
     halt = 0,
     add,
-    cp,
-    jmp,
+    copy,
+    jump,
     mul,
-    nop,
+    noop,
     put,
     sub,
 }
 
 const HALT_ID: u8 = InstructionName::halt as u8;
 const ADD_ID: u8 = InstructionName::add as u8;
-const CP_ID: u8 = InstructionName::cp as u8;
-const JMP_ID: u8 = InstructionName::jmp as u8;
+const CP_ID: u8 = InstructionName::copy as u8;
+const JMP_ID: u8 = InstructionName::jump as u8;
 const MUL_ID: u8 = InstructionName::mul as u8;
-const NOP_ID: u8 = InstructionName::nop as u8;
+const NOP_ID: u8 = InstructionName::noop as u8;
 const PUT_ID: u8 = InstructionName::put as u8;
 const SUB_ID: u8 = InstructionName::sub as u8;
 
@@ -31,17 +31,17 @@ const SUB_ID: u8 = InstructionName::sub as u8;
 pub enum Instruction {
     halt,
     add(RegisterName, RegisterName),
-    cp(RegisterName, RegisterName),
-    jmp(RegisterName, RegisterName),
+    copy(RegisterName, RegisterName),
+    jump(RegisterName, RegisterName),
     mul(RegisterName, RegisterName),
-    nop,
+    noop,
     put(u16, RegisterName),
     sub(RegisterName, RegisterName),
 }
 
 #[derive(Error, Debug)]
 pub enum ParseError {
-    #[error("'{0}' is not a valid cpu instruction")]
+    #[error("'{0}' is not a valid rpu instruction")]
     NoSuchInstruction(String)
 }
 
@@ -64,22 +64,22 @@ impl Instruction {
                 let y = RegisterName::try_from_str(p[2])?;
                 Ok(Instruction::add(x, y))
             },
-            "cp" => {
+            "copy" => {
                 let src = RegisterName::try_from_str(p[1])?;
                 let dst = RegisterName::try_from_str(p[2])?;
-                Ok(Instruction::cp(src, dst))
+                Ok(Instruction::copy(src, dst))
             },
-            "jmp" => {
+            "jump" => {
                 let addr = RegisterName::try_from_str(p[1])?;
                 let cond = RegisterName::try_from_str(p[2])?;
-                Ok(Instruction::jmp(addr, cond))
+                Ok(Instruction::jump(addr, cond))
             },
             "mul" => {
                 let x = RegisterName::try_from_str(p[1])?;
                 let y = RegisterName::try_from_str(p[2])?;
                 Ok(Instruction::mul(x, y))
             },
-            "nop" => Ok(Instruction::nop),
+            "noop" => Ok(Instruction::noop),
             "put" => {
                 let val: u16 = p[1].parse()?;
                 let dst = RegisterName::try_from_str(p[2])?;
@@ -102,16 +102,16 @@ impl Instruction {
             Instruction::add(x, y) => {
                 u32::from_ne_bytes([ADD_ID,*x as u8,*y as u8,0])
             },
-            Instruction::cp(src, dst) => {
+            Instruction::copy(src, dst) => {
                 u32::from_ne_bytes([CP_ID,*src as u8,*dst as u8,0])
             },
-            Instruction::jmp(addr, cond) => {
+            Instruction::jump(addr, cond) => {
                 u32::from_ne_bytes([JMP_ID,*addr as u8,*cond as u8,0])
             },
             Instruction::mul(x, y) => {
                 u32::from_ne_bytes([MUL_ID,*x as u8,*y as u8,0])
             },
-            Instruction::nop => {
+            Instruction::noop => {
                 u32::from_ne_bytes([NOP_ID,0,0,0])
             }
             Instruction::put(val, dst) => {
@@ -137,19 +137,19 @@ impl Instruction {
             CP_ID => {
                 let src = RegisterName::try_from_u8(bytes[1])?;
                 let dst = RegisterName::try_from_u8(bytes[2])?;
-                Ok(Instruction::cp(src, dst))
+                Ok(Instruction::copy(src, dst))
             },
             JMP_ID => {
                 let addr = RegisterName::try_from_u8(bytes[1])?;
                 let cond = RegisterName::try_from_u8(bytes[2])?;
-                Ok(Instruction::jmp(addr, cond))
+                Ok(Instruction::jump(addr, cond))
             },
             MUL_ID => {
                 let x = RegisterName::try_from_u8(bytes[1])?;
                 let y = RegisterName::try_from_u8(bytes[2])?;
                 Ok(Instruction::mul(x, y))
             },
-            NOP_ID => Ok(Instruction::nop),
+            NOP_ID => Ok(Instruction::noop),
             PUT_ID => {
                 let val = u16::from_ne_bytes([bytes[1],bytes[2]]);
                 let dst = RegisterName::try_from_u8(bytes[3])?;
@@ -187,15 +187,15 @@ mod tests {
                 )
             ),
             (
-                "cp ans out",
-                Instruction::cp(
+                "copy ans out",
+                Instruction::copy(
                     RegisterName::ans,
                     RegisterName::out
                 )
             ),
             (
-                "jmp gp2 gp7",
-                Instruction::jmp(
+                "jump gp2 gp7",
+                Instruction::jump(
                     RegisterName::gp2,
                     RegisterName::gp7
                 )
@@ -208,8 +208,8 @@ mod tests {
                 )
             ),
             (
-                "nop",
-                Instruction::nop
+                "noop",
+                Instruction::noop
             ),
             (
                 "put 7 gp0",
@@ -254,24 +254,24 @@ mod tests {
                 ])
             ),
             (
-                Instruction::cp(
+                Instruction::copy(
                     RegisterName::gp3,
                     RegisterName::out
                 ),
                 u32::from_ne_bytes([
-                    InstructionName::cp as u8,
+                    InstructionName::copy as u8,
                     RegisterName::gp3 as u8,
                     RegisterName::out as u8,
                     0
                 ])
             ),
             (
-                Instruction::jmp(
+                Instruction::jump(
                     RegisterName::gp7,
                     RegisterName::gp6
                 ),
                 u32::from_ne_bytes([
-                    InstructionName::jmp as u8,
+                    InstructionName::jump as u8,
                     RegisterName::gp7 as u8,
                     RegisterName::gp6 as u8,
                     0
@@ -290,9 +290,9 @@ mod tests {
                 ])
             ),
             (
-                Instruction::nop,
+                Instruction::noop,
                 u32::from_ne_bytes([
-                    InstructionName::nop as u8,
+                    InstructionName::noop as u8,
                     0,
                     0,
                     0
@@ -351,24 +351,24 @@ mod tests {
                 ])
             ),
             (
-                Instruction::cp(
+                Instruction::copy(
                     RegisterName::gp3,
                     RegisterName::out
                 ),
                 u32::from_ne_bytes([
-                    InstructionName::cp as u8,
+                    InstructionName::copy as u8,
                     RegisterName::gp3 as u8,
                     RegisterName::out as u8,
                     0
                 ])
             ),
             (
-                Instruction::jmp(
+                Instruction::jump(
                     RegisterName::gp7,
                     RegisterName::gp6
                 ),
                 u32::from_ne_bytes([
-                    InstructionName::jmp as u8,
+                    InstructionName::jump as u8,
                     RegisterName::gp7 as u8,
                     RegisterName::gp6 as u8,
                     0
@@ -387,9 +387,9 @@ mod tests {
                 ])
             ),
             (
-                Instruction::nop,
+                Instruction::noop,
                 u32::from_ne_bytes([
-                    InstructionName::nop as u8,
+                    InstructionName::noop as u8,
                     0,
                     0,
                     0

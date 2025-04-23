@@ -1,6 +1,6 @@
-nop
-nop
-nop
-nop
-nop
-cp pc out
+noop
+noop
+noop
+noop
+noop
+copy pc out
