@@ -224,6 +224,28 @@ impl Core {
         Ok(())
     }
 
+    fn store(&mut self, src: RegisterName, addr: RegisterName)
+        -> Result<()>
+    {
+        let val: u16 = match src {
+            RegisterName::out => {
+                return Err(ExecutionError::CannotCpFrom(src).into());
+            },
+            _ => self.register_file.read(src)
+        };
+
+        let addr: u16 = match addr {
+            RegisterName::out => {
+                return Err(ExecutionError::CannotCpFrom(addr).into());
+            },
+            _ => self.register_file.read(addr)
+        };
+
+        self.memory[addr as usize] = val.to_ne_bytes()[0];
+        self.memory[(addr + 1) as usize] = val.to_ne_bytes()[1];
+        Ok(())
+    }
+
     pub fn execute_single_instruction(
         &mut self,
         lcd0: &mut u16,
@@ -246,6 +268,7 @@ impl Core {
             Instruction::noop => (),
             Instruction::put(val, dst) => self.put(val, dst)?,
             Instruction::sub(x, y) => self.sub(x, y)?,
+            Instruction::store(src, addr) => self.store(src, addr)?,
         }
         let pc = self.register_file.read(RegisterName::pc);
         self.register_file.write(RegisterName::pc, pc + 4);
@@ -289,6 +312,31 @@ mod tests {
         assert_eq!(pu.memory[5], RegisterName::ans as u8);
         assert_eq!(pu.memory[6], RegisterName::out as u8);
         assert_eq!(pu.memory[7], 0);
+    }
+
+    #[test]
+    fn test_memory() {
+        let mut core = Core::new();
+        assert_eq!(core.memory[100], 0);
+        assert_eq!(core.memory[101], 0);
+
+        let source = [
+            "put 258 gp0",
+            "put 100 gp1",
+            "store gp0 gp1"
+        ];
+        let source = source.join("\n");
+        let program = Program::try_compile(&source).unwrap();
+        core.load_program(program).unwrap();
+
+        let mut _lcd0 = 0;
+        let mut _lcd1 = 0;
+        core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
+        core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
+        core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
+
+        assert_eq!(core.memory[100], 2);
+        assert_eq!(core.memory[101], 1);
     }
 }
 

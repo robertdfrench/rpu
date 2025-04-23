@@ -15,6 +15,7 @@ pub enum InstructionName {
     noop,
     put,
     sub,
+    store,
 }
 
 const HALT_ID: u8 = InstructionName::halt as u8;
@@ -25,6 +26,7 @@ const MUL_ID: u8 = InstructionName::mul as u8;
 const NOP_ID: u8 = InstructionName::noop as u8;
 const PUT_ID: u8 = InstructionName::put as u8;
 const SUB_ID: u8 = InstructionName::sub as u8;
+const STORE_ID: u8 = InstructionName::store as u8;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq)]
@@ -37,6 +39,7 @@ pub enum Instruction {
     noop,
     put(u16, RegisterName),
     sub(RegisterName, RegisterName),
+    store(RegisterName, RegisterName),
 }
 
 #[derive(Error, Debug)]
@@ -90,6 +93,11 @@ impl Instruction {
                 let y = RegisterName::try_from_str(p[2])?;
                 Ok(Instruction::sub(x, y))
             },
+            "store" => {
+                let src = RegisterName::try_from_str(p[1])?;
+                let addr = RegisterName::try_from_str(p[2])?;
+                Ok(Instruction::store(src, addr))
+            },
             _ => Err(ParseError::NoSuchInstruction(p[0].to_string()).into())
         }
     }
@@ -120,6 +128,9 @@ impl Instruction {
             },
             Instruction::sub(x, y) => {
                 u32::from_ne_bytes([SUB_ID,*x as u8,*y as u8,0])
+            },
+            Instruction::store(src, addr) => {
+                u32::from_ne_bytes([STORE_ID,*src as u8,*addr as u8,0])
             },
         }
     }
@@ -159,6 +170,11 @@ impl Instruction {
                 let x = RegisterName::try_from_u8(bytes[1])?;
                 let y = RegisterName::try_from_u8(bytes[2])?;
                 Ok(Instruction::sub(x, y))
+            },
+            STORE_ID => {
+                let src = RegisterName::try_from_u8(bytes[1])?;
+                let addr = RegisterName::try_from_u8(bytes[2])?;
+                Ok(Instruction::store(src, addr))
             },
             _ => Err(
                     DecodeError::NoSuchInstruction(instr as u8)
@@ -218,6 +234,13 @@ mod tests {
             (
                 "sub gp0 gp1",
                 Instruction::sub(
+                    RegisterName::gp0,
+                    RegisterName::gp1
+                )
+            ),
+            (
+                "store gp0 gp1",
+                Instruction::store(
                     RegisterName::gp0,
                     RegisterName::gp1
                 )
@@ -319,6 +342,18 @@ mod tests {
                     0
                 ])
             ),
+            (
+                Instruction::store(
+                    RegisterName::gp2,
+                    RegisterName::gp1
+                ),
+                u32::from_ne_bytes([
+                    InstructionName::store as u8,
+                    RegisterName::gp2 as u8,
+                    RegisterName::gp1 as u8,
+                    0
+                ])
+            ),
         ];
         for (instr, expected) in pairs {
             let actual = instr.to_u32();
@@ -411,6 +446,18 @@ mod tests {
                 ),
                 u32::from_ne_bytes([
                     InstructionName::sub as u8,
+                    RegisterName::gp2 as u8,
+                    RegisterName::gp1 as u8,
+                    0
+                ])
+            ),
+            (
+                Instruction::store(
+                    RegisterName::gp2,
+                    RegisterName::gp1
+                ),
+                u32::from_ne_bytes([
+                    InstructionName::store as u8,
                     RegisterName::gp2 as u8,
                     RegisterName::gp1 as u8,
                     0
