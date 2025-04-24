@@ -246,6 +246,23 @@ impl Core {
         Ok(())
     }
 
+    fn load(&mut self, addr: RegisterName, dst: RegisterName)
+        -> Result<()>
+    {
+        let addr: u16 = match addr {
+            RegisterName::out => {
+                return Err(ExecutionError::CannotCpFrom(addr).into());
+            },
+            _ => self.register_file.read(addr)
+        };
+
+        let mut val: [u8; 2] = [0; 2];
+        val[0] = self.memory[addr as usize];
+        val[1] = self.memory[(addr + 1) as usize];
+        let val = u16::from_ne_bytes(val);
+        self.put(val, dst)
+    }
+
     pub fn execute_single_instruction(
         &mut self,
         lcd0: &mut u16,
@@ -269,6 +286,7 @@ impl Core {
             Instruction::put(val, dst) => self.put(val, dst)?,
             Instruction::sub(x, y) => self.sub(x, y)?,
             Instruction::store(src, addr) => self.store(src, addr)?,
+            Instruction::load(addr, dst) => self.load(addr, dst)?,
         }
         let pc = self.register_file.read(RegisterName::pc);
         self.register_file.write(RegisterName::pc, pc + 4);
@@ -323,7 +341,8 @@ mod tests {
         let source = [
             "put 258 gp0",
             "put 100 gp1",
-            "store gp0 gp1"
+            "store gp0 gp1",
+            "load gp1 gp2",
         ];
         let source = source.join("\n");
         let program = Program::try_compile(&source).unwrap();
@@ -334,9 +353,11 @@ mod tests {
         core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
         core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
         core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
+        core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
 
         assert_eq!(core.memory[100], 2);
         assert_eq!(core.memory[101], 1);
+        assert_eq!(core.register_file.gp2, 258);
     }
 }
 

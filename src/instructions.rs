@@ -16,6 +16,7 @@ pub enum InstructionName {
     put,
     sub,
     store,
+    load,
 }
 
 const HALT_ID: u8 = InstructionName::halt as u8;
@@ -27,6 +28,7 @@ const NOP_ID: u8 = InstructionName::noop as u8;
 const PUT_ID: u8 = InstructionName::put as u8;
 const SUB_ID: u8 = InstructionName::sub as u8;
 const STORE_ID: u8 = InstructionName::store as u8;
+const LOAD_ID: u8 = InstructionName::load as u8;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq)]
@@ -40,6 +42,7 @@ pub enum Instruction {
     put(u16, RegisterName),
     sub(RegisterName, RegisterName),
     store(RegisterName, RegisterName),
+    load(RegisterName, RegisterName),
 }
 
 #[derive(Error, Debug)]
@@ -98,6 +101,11 @@ impl Instruction {
                 let addr = RegisterName::try_from_str(p[2])?;
                 Ok(Instruction::store(src, addr))
             },
+            "load" => {
+                let addr = RegisterName::try_from_str(p[1])?;
+                let dst = RegisterName::try_from_str(p[2])?;
+                Ok(Instruction::load(addr, dst))
+            },
             _ => Err(ParseError::NoSuchInstruction(p[0].to_string()).into())
         }
     }
@@ -131,6 +139,9 @@ impl Instruction {
             },
             Instruction::store(src, addr) => {
                 u32::from_ne_bytes([STORE_ID,*src as u8,*addr as u8,0])
+            },
+            Instruction::load(addr, dst) => {
+                u32::from_ne_bytes([LOAD_ID,*addr as u8,*dst as u8,0])
             },
         }
     }
@@ -175,6 +186,11 @@ impl Instruction {
                 let src = RegisterName::try_from_u8(bytes[1])?;
                 let addr = RegisterName::try_from_u8(bytes[2])?;
                 Ok(Instruction::store(src, addr))
+            },
+            LOAD_ID => {
+                let addr = RegisterName::try_from_u8(bytes[1])?;
+                let dst = RegisterName::try_from_u8(bytes[2])?;
+                Ok(Instruction::load(addr, dst))
             },
             _ => Err(
                     DecodeError::NoSuchInstruction(instr as u8)
@@ -241,6 +257,13 @@ mod tests {
             (
                 "store gp0 gp1",
                 Instruction::store(
+                    RegisterName::gp0,
+                    RegisterName::gp1
+                )
+            ),
+            (
+                "load gp0 gp1",
+                Instruction::load(
                     RegisterName::gp0,
                     RegisterName::gp1
                 )
@@ -354,6 +377,18 @@ mod tests {
                     0
                 ])
             ),
+            (
+                Instruction::load(
+                    RegisterName::gp2,
+                    RegisterName::gp1
+                ),
+                u32::from_ne_bytes([
+                    InstructionName::load as u8,
+                    RegisterName::gp2 as u8,
+                    RegisterName::gp1 as u8,
+                    0
+                ])
+            ),
         ];
         for (instr, expected) in pairs {
             let actual = instr.to_u32();
@@ -458,6 +493,18 @@ mod tests {
                 ),
                 u32::from_ne_bytes([
                     InstructionName::store as u8,
+                    RegisterName::gp2 as u8,
+                    RegisterName::gp1 as u8,
+                    0
+                ])
+            ),
+            (
+                Instruction::load(
+                    RegisterName::gp2,
+                    RegisterName::gp1
+                ),
+                u32::from_ne_bytes([
+                    InstructionName::load as u8,
                     RegisterName::gp2 as u8,
                     RegisterName::gp1 as u8,
                     0
