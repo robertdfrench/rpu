@@ -52,7 +52,7 @@ impl Core {
         Ok(())
     }
 
-    fn load_program(&mut self, program: Program) -> Result<()> {
+    pub fn load_program(&mut self, program: &Program) -> Result<()> {
         if program.size() >= 65_536 {
             return Err(
                 ExecutionError::ProgramTooBig(
@@ -68,7 +68,7 @@ impl Core {
 
     pub fn load_source(&mut self, source: &str) -> Result<()> {
         let program = Program::try_compile(source)?;
-        self.load_program(program)?;
+        self.load_program(&program)?;
         Ok(())
     }
 
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_loading() {
-        let mut pu = Core::new();
+        let mut core = Core::new();
 
         let source = [
             "put 7 gp0",
@@ -299,19 +299,19 @@ mod tests {
         let source = source.join("\n");
         let program = Program::try_compile(&source).unwrap();
 
-        pu.load_program(program).unwrap();
+        core.load_program(&program).unwrap();
 
-        // put 7 gp0
-        assert_eq!(pu.memory[0], InstructionName::put as u8);
-        assert_eq!(pu.memory[1], 7);
-        assert_eq!(pu.memory[2], 0);
-        assert_eq!(pu.memory[3], RegisterName::gp0 as u8);
+        // coret 7 gp0
+        assert_eq!(core.memory[0], InstructionName::put as u8);
+        assert_eq!(core.memory[1], 7);
+        assert_eq!(core.memory[2], 0);
+        assert_eq!(core.memory[3], RegisterName::gp0 as u8);
 
         // copy ans out
-        assert_eq!(pu.memory[4], InstructionName::copy as u8);
-        assert_eq!(pu.memory[5], RegisterName::ans as u8);
-        assert_eq!(pu.memory[6], RegisterName::out as u8);
-        assert_eq!(pu.memory[7], 0);
+        assert_eq!(core.memory[4], InstructionName::copy as u8);
+        assert_eq!(core.memory[5], RegisterName::ans as u8);
+        assert_eq!(core.memory[6], RegisterName::out as u8);
+        assert_eq!(core.memory[7], 0);
     }
 
     #[test]
@@ -327,7 +327,7 @@ mod tests {
         ];
         let source = source.join("\n");
         let program = Program::try_compile(&source).unwrap();
-        core.load_program(program).unwrap();
+        core.load_program(&program).unwrap();
 
         let mut _lcd0 = 0;
         let mut _lcd1 = 0;

@@ -5,15 +5,23 @@ use std::mem::size_of;
 use crate::instructions::Instruction;
 
 pub struct Program {
-    instructions: Vec<Instruction>
+    instructions: Vec<Instruction>,
+    pub source_lines: Vec<String>,
+    pub source_addrs: HashMap<u16, usize>,
 }
 
 impl Program {
     pub fn try_compile(source: &str) -> Result<Self> {
         let mut instructions = vec![];
+        let mut source_lines = vec![];
+        let mut source_addrs = HashMap::new();
         let mut labels = HashMap::<String,usize>::new();
 
-        for line in source.lines() {
+        const WIDTH: usize = size_of::<Instruction>();
+
+        for (n, line) in source.lines().enumerate() {
+            let address = instructions.len() * WIDTH;
+            source_lines.push(line.to_string());
             if line.starts_with("#") { continue; }
             if line.len() == 0 { continue; }
             let mut parts: Vec<String> = line
@@ -32,17 +40,16 @@ impl Program {
             if parts.len() == 4 {
                 let label = parts[3].clone();
                 if label.starts_with(":") {
-                    let width = size_of::<Instruction>();
-                    let address = instructions.len() * width;
                     labels.insert(label, address);
                 }
             }
             let line = parts.join(" ");
             let instruction = Instruction::try_from_str(&line)?;
             instructions.push(instruction);
+            source_addrs.insert(address as u16, n);
         }
 
-        Ok(Self{ instructions })
+        Ok(Self{ instructions, source_lines, source_addrs })
     }
 
     pub fn size(&self) -> usize {
@@ -205,5 +212,33 @@ mod tests {
         assert_eq!(memory[5], RegisterName::ans as u8);
         assert_eq!(memory[6], RegisterName::out as u8);
         assert_eq!(memory[7], 0);
+    }
+
+    #[test]
+    fn test_source_lines() {
+        let source = [
+            "put 7 gp0",
+            "# comment",
+            "copy ans out"
+        ];
+        let source = source.join("\n");
+        let program = Program::try_compile(&source).unwrap();
+
+        assert_eq!(&program.source_lines[1], "# comment");
+    }
+
+    #[test]
+    fn test_source_addrs() {
+        let source = [
+            "put 7 gp0",
+            "# comment",
+            "copy ans out"
+        ];
+        let source = source.join("\n");
+        let program = Program::try_compile(&source).unwrap();
+
+        assert_eq!(*program.source_addrs.get(&0).unwrap(), 0);
+        assert_eq!(*program.source_addrs.get(&4).unwrap(), 2);
+        assert_eq!(program.source_addrs.get(&8), None);
     }
 }

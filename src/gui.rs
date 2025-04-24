@@ -16,13 +16,16 @@ import![
     KeyCode < crossterm::event,
     Frame < ratatui,
     Layout < ratatui::layout,
+    Line < ratatui::text,
     Paragraph < ratatui::widgets,
+    Program < crate::programs,
     Rect < ratatui::layout,
     Result < color_eyre,
     Row < ratatui::widgets,
     Style < ratatui::style,
     Stylize < ratatui::style,
     Table < ratatui::widgets,
+    Text < ratatui::text,
     event < crossterm,
     fs < std,
 ];
@@ -55,12 +58,13 @@ fn run(
 pub fn main(path: &str) -> Result<()> {
     let source = fs::read_to_string(path)?;
     let mut core = Core::new();
-    core.load_source(&source).unwrap();
+    let program = Program::try_compile(&source).unwrap();
+    core.load_program(&program).unwrap();
 
 
     color_eyre::install()?;
     let terminal = ratatui::init();
-    let computer = Computer::new(core, &source);
+    let computer = Computer::new(core, program);
     let result = run(terminal, computer);
     ratatui::restore();
     result
@@ -68,19 +72,18 @@ pub fn main(path: &str) -> Result<()> {
 
 struct Computer {
     core: Core,
-    code: String,
+    program: Program,
     lcd0: u16,
     lcd1: u16,
 }
 
 impl Computer {
-    fn new(core: Core, source: &str) -> Self {
-        let code = String::from(source);
+    fn new(core: Core, program: Program) -> Self {
         let lcd0: u16 = 0;
         let lcd1: u16 = 0;
         Self {
             core,
-            code,
+            program,
             lcd0, lcd1
         }
     }
@@ -148,7 +151,8 @@ fn render(computer: &Computer, frame: &mut Frame) {
     let layouts = Layouts::new(frame);
 
 
-    render_code(&computer.code, layouts.code, frame, "Code");
+    render_code(&computer.program,
+        computer.core.register_file.pc, layouts.code, frame, "Code");
     render_lcd(computer.lcd0, layouts.lcd0, frame, "LCD0 (dvc 0)");
     render_lcd(computer.lcd1, layouts.lcd1, frame, "LCD1 (dvc 1)");
     render_printer(&computer.core.tty, layouts.printer, frame, "Printer (dvc 2)");
@@ -189,12 +193,24 @@ fn render(computer: &Computer, frame: &mut Frame) {
 }
 
 fn render_code(
-    code: &str,
+    program: &Program,
+    pc: u16,
     area: Rect, 
     frame: &mut Frame,
     title: &str,
 ) {
-    let paragraph = Paragraph::new(code)
+    let mut lines = vec![];
+    let current_line = program.source_addrs.get(&pc);
+    let source_lines = &program.source_lines;
+    for (n, source_line) in source_lines.into_iter().enumerate() {
+        let mut line = Line::from(source_line.clone());
+        if current_line == Some(&n) {
+            line = line.style(Style::new().white().on_black().italic());
+        }
+        lines.push(line)
+    }
+    let text = Text::from(lines);
+    let paragraph = Paragraph::new(text)
         .block(common_block(title));
     frame.render_widget(paragraph, area);
 }
