@@ -10,6 +10,16 @@ pub struct Program {
     pub source_addrs: HashMap<u16, usize>,
 }
 
+fn skippable(line: &str) -> bool {
+    line.starts_with("#") || line.len() == 0
+}
+
+fn tokenize(line: &str) -> Vec<String> {
+    line.split_whitespace()
+        .map(|s| s.to_string())
+        .collect()
+}
+
 impl Program {
     pub fn try_compile(source: &str) -> Result<Self> {
         let mut instructions = vec![];
@@ -19,31 +29,37 @@ impl Program {
 
         const WIDTH: usize = size_of::<Instruction>();
 
+        let mut estimated_address = 0;
+        for line in source.lines() {
+            if skippable(line) { continue; }
+
+            let tokens = tokenize(line);
+            let final_token = &tokens[tokens.len() - 1];
+            if final_token.starts_with(".") {
+                if !labels.contains_key(final_token) {
+                    labels.insert(
+                        final_token.to_string(),
+                        estimated_address
+                    );
+                }
+            }
+            estimated_address += WIDTH;
+        }
+
         for (n, line) in source.lines().enumerate() {
             let address = instructions.len() * WIDTH;
             source_lines.push(line.to_string());
-            if line.starts_with("#") { continue; }
-            if line.len() == 0 { continue; }
-            let mut parts: Vec<String> = line
-                .split_whitespace()
-                .map(|s| s.to_string())
-                .collect();
-            for i in 0..(parts.len() - 1) {
-                if parts[i].starts_with(":") {
-                    // This is a :LABEL
-                    // It needs to be replaced
-                    let address = labels.get(&parts[i])
+            if skippable(line) { continue; }
+
+            let mut tokens = tokenize(line);
+            for token in tokens.iter_mut() {
+                if token.starts_with(".") {
+                    let address = labels.get(token)
                         .unwrap();
-                    parts[i] = format!("{address}");
+                    *token = format!("{address}");
                 }
             }
-            if parts.len() == 4 {
-                let label = parts[3].clone();
-                if label.starts_with(":") {
-                    labels.insert(label, address);
-                }
-            }
-            let line = parts.join(" ");
+            let line = tokens.join(" ");
             let instruction = Instruction::try_from_str(&line)?;
             instructions.push(instruction);
             source_addrs.insert(address as u16, n);
@@ -157,8 +173,8 @@ mod tests {
     fn test_address_replacement() {
         let source = [
             "put 7 gp0",
-            "copy ans out :LABEL",
-            "put :LABEL gp1",
+            "copy ans out .LABEL",
+            "put .LABEL gp1",
         ];
         let source = source.join("\n");
         let program = Program::try_compile(&source).unwrap();

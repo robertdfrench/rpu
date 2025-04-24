@@ -1,34 +1,31 @@
 macro_rules! import {
-    [$($i:ident < $m:path),* $(,)?] => {
-        $(use $m::{$i};)*
+    [$i:ident < $m:path] => {
+        use $m::{$i};
     };
 }
 
-import![
-    Block < ratatui::widgets,
-    Borders < ratatui::widgets,
-    Color < ratatui::style,
-    Core < crate::core,
-    Constraint < ratatui::layout,
-    DefaultTerminal < ratatui,
-    Direction < ratatui::layout,
-    Event < crossterm::event,
-    KeyCode < crossterm::event,
-    Frame < ratatui,
-    Layout < ratatui::layout,
-    Line < ratatui::text,
-    Paragraph < ratatui::widgets,
-    Program < crate::programs,
-    Rect < ratatui::layout,
-    Result < color_eyre,
-    Row < ratatui::widgets,
-    Style < ratatui::style,
-    Stylize < ratatui::style,
-    Table < ratatui::widgets,
-    Text < ratatui::text,
-    event < crossterm,
-    fs < std,
-];
+import![ Block < ratatui::widgets ];
+import![ Borders < ratatui::widgets ];
+import![ Core < crate::core ];
+import![ Constraint < ratatui::layout ];
+import![ DefaultTerminal < ratatui ];
+import![ Direction < ratatui::layout ];
+import![ Event < crossterm::event ];
+import![ KeyCode < crossterm::event ];
+import![ Frame < ratatui ];
+import![ Layout < ratatui::layout ];
+import![ Line < ratatui::text ];
+import![ Paragraph < ratatui::widgets ];
+import![ Program < crate::programs ];
+import![ Rect < ratatui::layout ];
+import![ Result < color_eyre ];
+import![ Row < ratatui::widgets ];
+import![ Style < ratatui::style ];
+import![ Stylize < ratatui::style ];
+import![ Table < ratatui::widgets ];
+import![ Text < ratatui::text ];
+import![ event < crossterm ];
+import![ fs < std ];
 
 fn run(
     mut terminal: DefaultTerminal,
@@ -205,7 +202,7 @@ fn render_code(
     for (n, source_line) in source_lines.into_iter().enumerate() {
         let mut line = Line::from(source_line.clone());
         if current_line == Some(&n) {
-            line = line.style(Style::new().white().on_black().italic());
+            line = line.style(Style::new().red().italic());
         }
         lines.push(line)
     }
@@ -311,8 +308,8 @@ fn render_memory(
         current_row.push(format!("{:5}", byte));
         if (addr + 1) % 8 == 0 {
             let style = match (addr / 8) % 2 == 0 {
-                true => Style::default().bg(Color::Gray),
-                false => Style::default().bg(Color::White),
+                true => Style::default(),
+                false => Style::default(),
             };
             rows.push(
                 Row::new(current_row).style(style)
