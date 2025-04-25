@@ -2,32 +2,39 @@ use crate::instructions::Instruction;
 use crate::registers::RegisterName;
 use crate::registers::RegisterFile;
 use crate::programs::Program;
+use crate::programs;
+use crate::instructions;
+use crate::registers;
 
-use anyhow::Result;
-use thiserror::Error;
-
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum ExecutionError {
-    #[error("Program is too damn big: {0} bytes")]
-    ProgramTooBig(usize),
-
-    #[error("Cannot 'put' into Register {0:?}")]
     CannotPut(RegisterName),
 
-    #[error("Cannot 'add' from Register {0:?}")]
     CannotAdd(RegisterName),
 
-    #[error("Cannot 'copy' from Register {0:?}")]
     CannotCpFrom(RegisterName),
 
-    #[error("Cannot 'copy' to Register {0:?}")]
     CannotCpTo(RegisterName),
 
-    #[error("Cannot fit {0}+{1} or {0}*{1} into a register")]
     Overflow(u16, u16),
 
-    #[error("Cannot fit {0} - {1} into a register")]
     Underflow(u16, u16),
+
+    Decode(instructions::DecodeError),
+
+    Access(registers::AccessError)
+}
+
+impl From<instructions::DecodeError> for ExecutionError {
+    fn from(other: instructions::DecodeError) -> Self {
+        Self::Decode(other)
+    }
+}
+
+impl From<registers::AccessError> for ExecutionError {
+    fn from(other: registers::AccessError) -> Self {
+        Self::Access(other)
+    }
 }
 
 pub struct Core {
@@ -37,8 +44,22 @@ pub struct Core {
     pub tty: String
 }
 
+#[derive(Debug)]
+pub enum BootError {
+    ProgramTooBig(usize),
+    Compilation(programs::CompilationError)
+}
+
+impl From<programs::CompilationError> for BootError {
+    fn from(other: programs::CompilationError) -> Self {
+        Self::Compilation(other)
+    }
+}
+
 impl Core {
-    pub fn new() -> Self {
+    pub fn new()
+        -> Self
+    {
         let register_file = RegisterFile::new();
         let memory = [0; 65_536];
         let tty = String::new();
@@ -46,19 +67,16 @@ impl Core {
         Self { register_file, memory, tty }
     }
 
-    fn write_tty(&mut self, byte: u16) -> Result<()> {
+    fn write_tty(&mut self, byte: u16) {
         let byte = String::from_utf16_lossy(&[byte]);
         self.tty.push_str(&byte);
-        Ok(())
     }
 
-    pub fn load_program(&mut self, program: &Program) -> Result<()> {
+    pub fn load_program(&mut self, program: &Program)
+        -> Result<(),BootError>
+    {
         if program.size() >= 65_536 {
-            return Err(
-                ExecutionError::ProgramTooBig(
-                    program.size()
-                ).into()
-            );
+            return Err(BootError::ProgramTooBig(program.size()));
         }
         for (i, byte) in program.bytes().enumerate() {
             self.memory[i] = byte;
@@ -66,53 +84,55 @@ impl Core {
         Ok(())
     }
 
-    pub fn load_source(&mut self, source: &str) -> Result<()> {
+    pub fn load_source(&mut self, source: &str)
+        -> Result<(), BootError>
+    {
         let program = Program::try_compile(source)?;
         self.load_program(&program)?;
         Ok(())
     }
 
     fn put(&mut self, val: u16, dst: RegisterName)
-        -> Result<()>
+        -> Result<(), ExecutionError>
     {
         match dst {
             RegisterName::pc => Err(
-                ExecutionError::CannotPut(dst).into()
+                ExecutionError::CannotPut(dst)
             ),
             RegisterName::ans => Err(
-                ExecutionError::CannotPut(dst).into()
+                ExecutionError::CannotPut(dst)
             ),
             RegisterName::out => Err(
-                ExecutionError::CannotPut(dst).into()
+                ExecutionError::CannotPut(dst)
             ),
             _ => {
-                self.register_file.write(dst, val);
+                self.register_file.write(dst, val)?;
                 Ok(())
             }
         }
     }
 
     fn add(&mut self, x: RegisterName, y: RegisterName)
-        -> Result<()>
+        -> Result<(), ExecutionError>
     {
         let x: u16 = match x {
             RegisterName::out => {
-                return Err(ExecutionError::CannotAdd(x).into());
+                return Err(ExecutionError::CannotAdd(x));
             },
-            _ => self.register_file.read(x)
+            _ => self.register_file.read(x)?
         };
 
         let y: u16 = match y {
             RegisterName::out => {
-                return Err(ExecutionError::CannotAdd(y).into());
+                return Err(ExecutionError::CannotAdd(y));
             },
-            _ => self.register_file.read(y)
+            _ => self.register_file.read(y)?
         };
 
         let ans = x.checked_add(y).ok_or(
             ExecutionError::Overflow(x,y)
         )?;
-        self.register_file.write(RegisterName::ans, ans);
+        self.register_file.write(RegisterName::ans, ans)?;
 
         Ok(())
     }
@@ -123,43 +143,43 @@ impl Core {
         lcd0: &mut u16,
         lcd1: &mut u16,
     )
-        -> Result<()>
+        -> Result<(), ExecutionError>
     {
         let val = match src {
             RegisterName::out => {
                 return Err(
-                    ExecutionError::CannotCpFrom(dst).into()
+                    ExecutionError::CannotCpFrom(dst)
                 );
             },
-            _ => self.register_file.read(src)
+            _ => self.register_file.read(src)?
         };
 
         match dst {
             RegisterName::pc => Err(
-                ExecutionError::CannotCpTo(dst).into()
+                ExecutionError::CannotCpTo(dst)
             ),
             RegisterName::ans => Err(
-                ExecutionError::CannotCpTo(dst).into()
+                ExecutionError::CannotCpTo(dst)
             ), 
             RegisterName::out => {
                 match self.register_file.dvc {
                     0 => { *lcd0 = val; },
                     1 => { *lcd1 = val; },
-                    _ => { self.write_tty(val)?; },
+                    _ => { self.write_tty(val); },
                 }
                 Ok(())
             },
             _ => {
-                self.register_file.write(dst, val);
+                self.register_file.write(dst, val)?;
                 Ok(())
             }
         }
     }
 
     fn jump(&mut self, addr: RegisterName, cond: RegisterName)
-        -> Result<()>
+        -> Result<(), ExecutionError>
     {
-        let mut addr = self.register_file.read(addr);
+        let mut addr = self.register_file.read(addr)?;
         addr = addr - (addr % 4); // Align addr to 4n
         if addr > 0 {
             // Back up to previous address unless that would go
@@ -167,78 +187,78 @@ impl Core {
             // have the same behavior.
             addr = addr - 4;
         }
-        let cond = self.register_file.read(cond);
+        let cond = self.register_file.read(cond)?;
         if cond == 0 {
-            self.register_file.write(RegisterName::pc, addr);
+            self.register_file.write(RegisterName::pc, addr)?;
         }
         Ok(())
     }
 
     fn mul(&mut self, x: RegisterName, y: RegisterName)
-        -> Result<()>
+        -> Result<(), ExecutionError>
     {
         let x: u16 = match x {
             RegisterName::out => {
-                return Err(ExecutionError::CannotAdd(x).into());
+                return Err(ExecutionError::CannotAdd(x));
             },
-            _ => self.register_file.read(x)
+            _ => self.register_file.read(x)?
         };
 
         let y: u16 = match y {
             RegisterName::out => {
-                return Err(ExecutionError::CannotAdd(y).into());
+                return Err(ExecutionError::CannotAdd(y));
             },
-            _ => self.register_file.read(y)
+            _ => self.register_file.read(y)?
         };
 
         let ans = x.checked_mul(y).ok_or(
             ExecutionError::Overflow(x,y)
         )?;
-        self.register_file.write(RegisterName::ans, ans);
+        self.register_file.write(RegisterName::ans, ans)?;
 
         Ok(())
     }
 
     fn sub(&mut self, x: RegisterName, y: RegisterName)
-        -> Result<()>
+        -> Result<(), ExecutionError>
     {
         let x: u16 = match x {
             RegisterName::out => {
-                return Err(ExecutionError::CannotAdd(x).into());
+                return Err(ExecutionError::CannotAdd(x));
             },
-            _ => self.register_file.read(x)
+            _ => self.register_file.read(x)?
         };
 
         let y: u16 = match y {
             RegisterName::out => {
-                return Err(ExecutionError::CannotAdd(y).into());
+                return Err(ExecutionError::CannotAdd(y));
             },
-            _ => self.register_file.read(y)
+            _ => self.register_file.read(y)?
         };
 
         let ans = x.checked_sub(y).ok_or(
             ExecutionError::Underflow(x,y)
         )?;
-        self.register_file.write(RegisterName::ans, ans);
+        self.register_file.write(RegisterName::ans, ans)?;
 
         Ok(())
     }
 
     fn write(&mut self, src: RegisterName, addr: RegisterName)
-        -> Result<()>
+        -> Result<(), ExecutionError>
     {
         let val: u16 = match src {
             RegisterName::out => {
-                return Err(ExecutionError::CannotCpFrom(src).into());
+                return Err(ExecutionError::CannotCpFrom(src));
             },
-            _ => self.register_file.read(src)
+            _ => self.register_file.read(src)?
         };
 
         let addr: u16 = match addr {
             RegisterName::out => {
-                return Err(ExecutionError::CannotCpFrom(addr).into());
+                return Err(ExecutionError::CannotCpFrom(addr));
             },
-            _ => self.register_file.read(addr)
+            _ => self.register_file.read(addr)?
         };
 
         self.memory[addr as usize] = val.to_ne_bytes()[0];
@@ -247,13 +267,13 @@ impl Core {
     }
 
     fn read(&mut self, addr: RegisterName, dst: RegisterName)
-        -> Result<()>
+        -> Result<(), ExecutionError>
     {
         let addr: u16 = match addr {
             RegisterName::out => {
-                return Err(ExecutionError::CannotCpFrom(addr).into());
+                return Err(ExecutionError::CannotCpFrom(addr));
             },
-            _ => self.register_file.read(addr)
+            _ => self.register_file.read(addr)?
         };
 
         let mut val: [u8; 2] = [0; 2];
@@ -267,9 +287,9 @@ impl Core {
         &mut self,
         lcd0: &mut u16,
         lcd1: &mut u16,
-    ) -> Result<bool> {
+    ) -> Result<bool, ExecutionError> {
         let mut instr: [u8; 4] = [0; 4];
-        let pc = self.register_file.read(RegisterName::pc);
+        let pc = self.register_file.read(RegisterName::pc)?;
         instr[0] = self.memory[(pc as usize) + 0];
         instr[1] = self.memory[(pc as usize) + 1];
         instr[2] = self.memory[(pc as usize) + 2];
@@ -288,8 +308,8 @@ impl Core {
             Instruction::write(src, addr) => self.write(src, addr)?,
             Instruction::read(addr, dst) => self.read(addr, dst)?,
         }
-        let pc = self.register_file.read(RegisterName::pc);
-        self.register_file.write(RegisterName::pc, pc + 4);
+        let pc = self.register_file.read(RegisterName::pc)?;
+        self.register_file.write(RegisterName::pc, pc + 4)?;
         Ok(false)
     }
 }
@@ -302,7 +322,7 @@ mod tests {
     #[test]
     fn test_tty() {
         let mut core = Core::new();
-        core.write_tty(55).unwrap();
+        core.write_tty(55);
         assert_eq!(&core.tty, "7");
     }
 
@@ -360,4 +380,3 @@ mod tests {
         assert_eq!(core.register_file.gp2, 258);
     }
 }
-

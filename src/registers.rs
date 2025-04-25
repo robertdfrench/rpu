@@ -1,6 +1,3 @@
-use anyhow::Result;
-use thiserror::Error;
-
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct RegisterFile {
@@ -36,7 +33,9 @@ impl RegisterFile {
         }
     }
 
-    pub fn write(&mut self, name: RegisterName, val: u16) {
+    pub fn write(&mut self, name: RegisterName, val: u16)
+        -> Result<(), AccessError>
+    {
         match name {
             RegisterName::gp0 => { self.gp0 = val },
             RegisterName::gp1 => { self.gp1 = val },
@@ -49,14 +48,18 @@ impl RegisterFile {
 
             RegisterName::ans => { self.ans = val },
             RegisterName::dvc => { self.dvc = val },
-            RegisterName::inp => panic!("inp is a pseudo-register"),
-            RegisterName::out => panic!("out is a pseudo-register"),
+            RegisterName::out => {
+                return Err(AccessError::PseudoRegister(name))
+            },
             RegisterName::pc  => { self.pc = val},
         }
+        Ok(())
     }
 
-    pub fn read(&mut self, name: RegisterName) -> u16 {
-        match name {
+    pub fn read(&mut self, name: RegisterName)
+        -> Result<u16, AccessError>
+    {
+        let val = match name {
             RegisterName::gp0 => self.gp0,
             RegisterName::gp1 => self.gp1,
             RegisterName::gp2 => self.gp2,
@@ -68,10 +71,12 @@ impl RegisterFile {
 
             RegisterName::ans => self.ans,
             RegisterName::dvc => self.dvc,
-            RegisterName::inp => panic!("inp is a pseudo-register"),
-            RegisterName::out => panic!("out is a pseudo-register"),
+            RegisterName::out => {
+                return Err(AccessError::PseudoRegister(name))
+            },
             RegisterName::pc  => self.pc,
-        }
+        };
+        Ok(val)
     }
 
 }
@@ -90,7 +95,6 @@ pub enum RegisterName {
     gp7,
     ans,
     dvc,
-    inp,
     out,
     pc,
 }
@@ -105,24 +109,26 @@ const GP6_ID: u8 = RegisterName::gp6 as u8;
 const GP7_ID: u8 = RegisterName::gp7 as u8;
 const ANS_ID: u8 = RegisterName::ans as u8;
 const DVC_ID: u8 = RegisterName::dvc as u8;
-const INP_ID: u8 = RegisterName::inp as u8;
 const OUT_ID: u8 = RegisterName::out as u8;
 const PC_ID: u8 = RegisterName::pc as u8;
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum ParseError {
-    #[error("There is no register called '{0}'")]
     NoSuchRegisterName(String)
 }
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum DecodeError {
-    #[error("No register associated with numerical id {0}")]
-    NoSuchRegisterName(u8)
+    NoSuchRegisterID(u8)
+}
+
+#[derive(Debug)]
+pub enum AccessError {
+    PseudoRegister(RegisterName),
 }
 
 impl RegisterName {
-    pub fn try_from_str(s: &str) -> Result<Self> {
+    pub fn try_parse(s: &str) -> Result<Self, ParseError> {
         match s {
             "gp0" => Ok(RegisterName::gp0),
             "gp1" => Ok(RegisterName::gp1),
@@ -135,14 +141,13 @@ impl RegisterName {
 
             "ans" => Ok(RegisterName::ans),
             "dvc" => Ok(RegisterName::dvc),
-            "inp" => Ok(RegisterName::inp),
             "out" => Ok(RegisterName::out),
             "pc"  => Ok(RegisterName::pc),
-            _ => Err(ParseError::NoSuchRegisterName(s.to_string()).into())
+            _ => Err(ParseError::NoSuchRegisterName(s.to_string()))
         }
     }
 
-    pub fn try_from_u8(x: u8) -> Result<Self> {
+    pub fn try_decode(x: u8) -> Result<Self, DecodeError> {
         match x {
             GP0_ID => Ok(RegisterName::gp0),
             GP1_ID => Ok(RegisterName::gp1),
@@ -155,10 +160,9 @@ impl RegisterName {
 
             ANS_ID => Ok(RegisterName::ans),
             DVC_ID => Ok(RegisterName::dvc),
-            INP_ID => Ok(RegisterName::inp),
             OUT_ID => Ok(RegisterName::out),
             PC_ID => Ok(RegisterName::pc),
-            _ => Err(DecodeError::NoSuchRegisterName(x).into())
+            _ => Err(DecodeError::NoSuchRegisterID(x))
         }
     }
 }
@@ -180,14 +184,21 @@ mod tests {
             ("gp7", RegisterName::gp7),
             ("ans", RegisterName::ans),
             ("dvc", RegisterName::dvc),
-            ("inp", RegisterName::inp),
             ("out", RegisterName::out),
             ("pc", RegisterName::pc),
         ];
         for (text, expected) in pairs {
-            let actual: RegisterName = RegisterName::try_from_str(text).unwrap();
+            let actual: RegisterName =
+                RegisterName::try_parse(text).unwrap();
             assert_eq!(expected, actual);
         }
+    }
+
+    #[test]
+    #[should_panic]
+    fn write_out() {
+        let mut file = RegisterFile::new();
+        file.write(RegisterName::out, 7).unwrap();
     }
 
     #[test]
@@ -203,12 +214,12 @@ mod tests {
             (GP7_ID, RegisterName::gp7),
             (ANS_ID, RegisterName::ans),
             (DVC_ID, RegisterName::dvc),
-            (INP_ID, RegisterName::inp),
             (OUT_ID, RegisterName::out),
             (PC_ID, RegisterName::pc),
         ];
         for (byte, expected) in pairs {
-            let actual: RegisterName = RegisterName::try_from_u8(byte).unwrap();
+            let actual: RegisterName =
+                RegisterName::try_decode(byte).unwrap();
             assert_eq!(expected, actual);
         }
     }
@@ -226,7 +237,6 @@ mod tests {
             (GP7_ID, RegisterName::gp7),
             (ANS_ID, RegisterName::ans),
             (DVC_ID, RegisterName::dvc),
-            (INP_ID, RegisterName::inp),
             (OUT_ID, RegisterName::out),
             (PC_ID, RegisterName::pc),
         ];

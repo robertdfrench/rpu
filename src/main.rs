@@ -56,19 +56,25 @@ fn run(
         match event::read()? {
             Event::Key(ke) => {  
                 match ke.code {
-                    KeyCode::Esc => { break Ok(()) },
-                    _ => match computer.core
-                        .execute_single_instruction(
-                            &mut computer.lcd0,
-                            &mut computer.lcd1,
-                        ) {
+                    KeyCode::Esc => {
+                        break Ok(())
+                    },
+                    _ => {
+                        let r = computer.core
+                            .execute_single_instruction(
+                                &mut computer.lcd0,
+                                &mut computer.lcd1,
+                            );
+                        match r {
                             Ok(false) => { continue; },
                             Ok(true) => { break Ok(()) },
                             Err(e) => {
-                                eprintln!("{e}");
-                                break Ok(());
+                                computer.core.tty +=
+                                    &format!("{:?}\n", e);
+                                continue;
                             }
-                        },
+                        }
+                    },
                 }
             },
             _ => {}

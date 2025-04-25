@@ -1,8 +1,8 @@
-use anyhow::Result;
 use std::collections::HashMap;
 use std::mem::size_of;
 
 use crate::instructions::Instruction;
+use crate::instructions;
 
 pub struct Program {
     instructions: Vec<Instruction>,
@@ -20,8 +20,21 @@ fn tokenize(line: &str) -> Vec<String> {
         .collect()
 }
 
+#[derive(Debug)]
+pub enum CompilationError {
+    InstructionParseError(instructions::ParseError),
+    UndefinedLabel(String),
+}
+
+
+impl From<instructions::ParseError> for CompilationError {
+    fn from(other: instructions::ParseError) -> Self {
+        Self::InstructionParseError(other)
+    }
+}
+
 impl Program {
-    pub fn try_compile(source: &str) -> Result<Self> {
+    pub fn try_compile(source: &str) -> Result<Self, CompilationError> {
         let mut instructions = vec![];
         let mut source_lines = vec![];
         let mut source_addrs = HashMap::new();
@@ -54,8 +67,9 @@ impl Program {
             let mut tokens = tokenize(line);
             for token in tokens.iter_mut() {
                 if token.starts_with(".") {
-                    let address = labels.get(token)
-                        .unwrap();
+                    let address = labels.get(token).ok_or(
+                        CompilationError::UndefinedLabel(token.to_string())
+                    )?;
                     *token = format!("{address}");
                 }
             }

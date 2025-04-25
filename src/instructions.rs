@@ -1,7 +1,6 @@
-use anyhow::Result;
-use thiserror::Error;
-
 use crate::registers::RegisterName;
+use crate::registers;
+use std::num::ParseIntError;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq)]
@@ -45,20 +44,39 @@ pub enum Instruction {
     read(RegisterName, RegisterName),
 }
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum ParseError {
-    #[error("'{0}' is not a valid rpu instruction")]
-    NoSuchInstruction(String)
+    NoSuchInstruction(String),
+    RegisterParseError(registers::ParseError),
+    InvalidInt(String),
 }
 
-#[derive(Error, Debug)]
+impl From<registers::ParseError> for ParseError {
+    fn from(other: registers::ParseError) -> Self {
+        Self::RegisterParseError(other)
+    }
+}
+
+impl From<ParseIntError> for ParseError {
+    fn from(other: ParseIntError) -> Self {
+        Self::InvalidInt(other.to_string())
+    }
+}
+
+#[derive(Debug)]
 pub enum DecodeError {
-    #[error("No instruction associated with numerical id {0}")]
-    NoSuchInstruction(u8)
+    NoSuchInstruction(u8),
+    RegisterDecodeError(registers::DecodeError)
+}
+
+impl From<registers::DecodeError> for DecodeError {
+    fn from(other: registers::DecodeError) -> Self {
+        Self::RegisterDecodeError(other)
+    }
 }
 
 impl Instruction {
-    pub fn try_from_str(s: &str) -> Result<Self> {
+    pub fn try_from_str(s: &str) -> Result<Self, ParseError> {
         let p: Vec<&str> = s
             .trim_end()
             .split_whitespace()
@@ -66,47 +84,47 @@ impl Instruction {
         match p[0] {
             "halt" => Ok(Instruction::halt),
             "add" => {
-                let x = RegisterName::try_from_str(p[1])?;
-                let y = RegisterName::try_from_str(p[2])?;
+                let x = RegisterName::try_parse(p[1])?;
+                let y = RegisterName::try_parse(p[2])?;
                 Ok(Instruction::add(x, y))
             },
             "copy" => {
-                let src = RegisterName::try_from_str(p[1])?;
-                let dst = RegisterName::try_from_str(p[2])?;
+                let src = RegisterName::try_parse(p[1])?;
+                let dst = RegisterName::try_parse(p[2])?;
                 Ok(Instruction::copy(src, dst))
             },
             "jump" => {
-                let addr = RegisterName::try_from_str(p[1])?;
-                let cond = RegisterName::try_from_str(p[2])?;
+                let addr = RegisterName::try_parse(p[1])?;
+                let cond = RegisterName::try_parse(p[2])?;
                 Ok(Instruction::jump(addr, cond))
             },
             "mul" => {
-                let x = RegisterName::try_from_str(p[1])?;
-                let y = RegisterName::try_from_str(p[2])?;
+                let x = RegisterName::try_parse(p[1])?;
+                let y = RegisterName::try_parse(p[2])?;
                 Ok(Instruction::mul(x, y))
             },
             "noop" => Ok(Instruction::noop),
             "put" => {
                 let val: u16 = p[1].parse()?;
-                let dst = RegisterName::try_from_str(p[2])?;
+                let dst = RegisterName::try_parse(p[2])?;
                 Ok(Instruction::put(val, dst))
             },
             "sub" => {
-                let x = RegisterName::try_from_str(p[1])?;
-                let y = RegisterName::try_from_str(p[2])?;
+                let x = RegisterName::try_parse(p[1])?;
+                let y = RegisterName::try_parse(p[2])?;
                 Ok(Instruction::sub(x, y))
             },
             "write" => {
-                let src = RegisterName::try_from_str(p[1])?;
-                let addr = RegisterName::try_from_str(p[2])?;
+                let src = RegisterName::try_parse(p[1])?;
+                let addr = RegisterName::try_parse(p[2])?;
                 Ok(Instruction::write(src, addr))
             },
             "read" => {
-                let addr = RegisterName::try_from_str(p[1])?;
-                let dst = RegisterName::try_from_str(p[2])?;
+                let addr = RegisterName::try_parse(p[1])?;
+                let dst = RegisterName::try_parse(p[2])?;
                 Ok(Instruction::read(addr, dst))
             },
-            _ => Err(ParseError::NoSuchInstruction(p[0].to_string()).into())
+            _ => Err(ParseError::NoSuchInstruction(p[0].to_string()))
         }
     }
 
@@ -146,55 +164,54 @@ impl Instruction {
         }
     }
 
-    pub fn try_from_u32(encoded: u32) -> Result<Self> {
+    pub fn try_from_u32(encoded: u32) -> Result<Self, DecodeError> {
         let bytes = encoded.to_ne_bytes();
         let instr = bytes[0];
         match instr {
             HALT_ID => Ok(Instruction::halt),
             ADD_ID => {
-                let x = RegisterName::try_from_u8(bytes[1])?;
-                let y = RegisterName::try_from_u8(bytes[2])?;
+                let x = RegisterName::try_decode(bytes[1])?;
+                let y = RegisterName::try_decode(bytes[2])?;
                 Ok(Instruction::add(x, y))
             },
             COPY_ID => {
-                let src = RegisterName::try_from_u8(bytes[1])?;
-                let dst = RegisterName::try_from_u8(bytes[2])?;
+                let src = RegisterName::try_decode(bytes[1])?;
+                let dst = RegisterName::try_decode(bytes[2])?;
                 Ok(Instruction::copy(src, dst))
             },
             JUMP_ID => {
-                let addr = RegisterName::try_from_u8(bytes[1])?;
-                let cond = RegisterName::try_from_u8(bytes[2])?;
+                let addr = RegisterName::try_decode(bytes[1])?;
+                let cond = RegisterName::try_decode(bytes[2])?;
                 Ok(Instruction::jump(addr, cond))
             },
             MUL_ID => {
-                let x = RegisterName::try_from_u8(bytes[1])?;
-                let y = RegisterName::try_from_u8(bytes[2])?;
+                let x = RegisterName::try_decode(bytes[1])?;
+                let y = RegisterName::try_decode(bytes[2])?;
                 Ok(Instruction::mul(x, y))
             },
             NOOP_ID => Ok(Instruction::noop),
             PUT_ID => {
                 let val = u16::from_ne_bytes([bytes[1],bytes[2]]);
-                let dst = RegisterName::try_from_u8(bytes[3])?;
+                let dst = RegisterName::try_decode(bytes[3])?;
                 Ok(Instruction::put(val, dst))
             },
             SUB_ID => {
-                let x = RegisterName::try_from_u8(bytes[1])?;
-                let y = RegisterName::try_from_u8(bytes[2])?;
+                let x = RegisterName::try_decode(bytes[1])?;
+                let y = RegisterName::try_decode(bytes[2])?;
                 Ok(Instruction::sub(x, y))
             },
             WRITE_ID => {
-                let src = RegisterName::try_from_u8(bytes[1])?;
-                let addr = RegisterName::try_from_u8(bytes[2])?;
+                let src = RegisterName::try_decode(bytes[1])?;
+                let addr = RegisterName::try_decode(bytes[2])?;
                 Ok(Instruction::write(src, addr))
             },
             READ_ID => {
-                let addr = RegisterName::try_from_u8(bytes[1])?;
-                let dst = RegisterName::try_from_u8(bytes[2])?;
+                let addr = RegisterName::try_decode(bytes[1])?;
+                let dst = RegisterName::try_decode(bytes[2])?;
                 Ok(Instruction::read(addr, dst))
             },
             _ => Err(
                     DecodeError::NoSuchInstruction(instr as u8)
-                        .into()
                 )
         }
     }
