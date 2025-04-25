@@ -7,7 +7,7 @@ put 0   dvc
 
 jump  gp4 gp0 .decr 
 sub   gp0 gp1
-store ans gp2
+write ans gp2
 copy  ans gp0
 add   gp2 gp1
 copy  ans gp2

@@ -224,7 +224,7 @@ impl Core {
         Ok(())
     }
 
-    fn store(&mut self, src: RegisterName, addr: RegisterName)
+    fn write(&mut self, src: RegisterName, addr: RegisterName)
         -> Result<()>
     {
         let val: u16 = match src {
@@ -246,7 +246,7 @@ impl Core {
         Ok(())
     }
 
-    fn load(&mut self, addr: RegisterName, dst: RegisterName)
+    fn read(&mut self, addr: RegisterName, dst: RegisterName)
         -> Result<()>
     {
         let addr: u16 = match addr {
@@ -285,8 +285,8 @@ impl Core {
             Instruction::noop => (),
             Instruction::put(val, dst) => self.put(val, dst)?,
             Instruction::sub(x, y) => self.sub(x, y)?,
-            Instruction::store(src, addr) => self.store(src, addr)?,
-            Instruction::load(addr, dst) => self.load(addr, dst)?,
+            Instruction::write(src, addr) => self.write(src, addr)?,
+            Instruction::read(addr, dst) => self.read(addr, dst)?,
         }
         let pc = self.register_file.read(RegisterName::pc);
         self.register_file.write(RegisterName::pc, pc + 4);
@@ -341,8 +341,8 @@ mod tests {
         let source = [
             "put 258 gp0",
             "put 100 gp1",
-            "store gp0 gp1",
-            "load gp1 gp2",
+            "write gp0 gp1",
+            "read gp1 gp2",
         ];
         let source = source.join("\n");
         let program = Program::try_compile(&source).unwrap();

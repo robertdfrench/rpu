@@ -11,24 +11,24 @@ pub enum InstructionName {
     add,
     copy,
     jump,
+    read,
     mul,
     noop,
     put,
+    write,
     sub,
-    store,
-    load,
 }
 
-const HALT_ID: u8 = InstructionName::halt as u8;
-const ADD_ID: u8 = InstructionName::add as u8;
-const CP_ID: u8 = InstructionName::copy as u8;
-const JMP_ID: u8 = InstructionName::jump as u8;
-const MUL_ID: u8 = InstructionName::mul as u8;
-const NOP_ID: u8 = InstructionName::noop as u8;
-const PUT_ID: u8 = InstructionName::put as u8;
-const SUB_ID: u8 = InstructionName::sub as u8;
-const STORE_ID: u8 = InstructionName::store as u8;
-const LOAD_ID: u8 = InstructionName::load as u8;
+const HALT_ID:  u8 = InstructionName::halt  as u8;
+const ADD_ID:   u8 = InstructionName::add   as u8;
+const COPY_ID:  u8 = InstructionName::copy  as u8;
+const JUMP_ID:  u8 = InstructionName::jump  as u8;
+const MUL_ID:   u8 = InstructionName::mul   as u8;
+const NOOP_ID:  u8 = InstructionName::noop  as u8;
+const PUT_ID:   u8 = InstructionName::put   as u8;
+const SUB_ID:   u8 = InstructionName::sub   as u8;
+const WRITE_ID: u8 = InstructionName::write as u8;
+const READ_ID:  u8 = InstructionName::read  as u8;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq)]
@@ -41,8 +41,8 @@ pub enum Instruction {
     noop,
     put(u16, RegisterName),
     sub(RegisterName, RegisterName),
-    store(RegisterName, RegisterName),
-    load(RegisterName, RegisterName),
+    write(RegisterName, RegisterName),
+    read(RegisterName, RegisterName),
 }
 
 #[derive(Error, Debug)]
@@ -96,15 +96,15 @@ impl Instruction {
                 let y = RegisterName::try_from_str(p[2])?;
                 Ok(Instruction::sub(x, y))
             },
-            "store" => {
+            "write" => {
                 let src = RegisterName::try_from_str(p[1])?;
                 let addr = RegisterName::try_from_str(p[2])?;
-                Ok(Instruction::store(src, addr))
+                Ok(Instruction::write(src, addr))
             },
-            "load" => {
+            "read" => {
                 let addr = RegisterName::try_from_str(p[1])?;
                 let dst = RegisterName::try_from_str(p[2])?;
-                Ok(Instruction::load(addr, dst))
+                Ok(Instruction::read(addr, dst))
             },
             _ => Err(ParseError::NoSuchInstruction(p[0].to_string()).into())
         }
@@ -119,16 +119,16 @@ impl Instruction {
                 u32::from_ne_bytes([ADD_ID,*x as u8,*y as u8,0])
             },
             Instruction::copy(src, dst) => {
-                u32::from_ne_bytes([CP_ID,*src as u8,*dst as u8,0])
+                u32::from_ne_bytes([COPY_ID,*src as u8,*dst as u8,0])
             },
             Instruction::jump(addr, cond) => {
-                u32::from_ne_bytes([JMP_ID,*addr as u8,*cond as u8,0])
+                u32::from_ne_bytes([JUMP_ID,*addr as u8,*cond as u8,0])
             },
             Instruction::mul(x, y) => {
                 u32::from_ne_bytes([MUL_ID,*x as u8,*y as u8,0])
             },
             Instruction::noop => {
-                u32::from_ne_bytes([NOP_ID,0,0,0])
+                u32::from_ne_bytes([NOOP_ID,0,0,0])
             }
             Instruction::put(val, dst) => {
                 let v = val.to_ne_bytes();
@@ -137,11 +137,11 @@ impl Instruction {
             Instruction::sub(x, y) => {
                 u32::from_ne_bytes([SUB_ID,*x as u8,*y as u8,0])
             },
-            Instruction::store(src, addr) => {
-                u32::from_ne_bytes([STORE_ID,*src as u8,*addr as u8,0])
+            Instruction::write(src, addr) => {
+                u32::from_ne_bytes([WRITE_ID,*src as u8,*addr as u8,0])
             },
-            Instruction::load(addr, dst) => {
-                u32::from_ne_bytes([LOAD_ID,*addr as u8,*dst as u8,0])
+            Instruction::read(addr, dst) => {
+                u32::from_ne_bytes([READ_ID,*addr as u8,*dst as u8,0])
             },
         }
     }
@@ -156,12 +156,12 @@ impl Instruction {
                 let y = RegisterName::try_from_u8(bytes[2])?;
                 Ok(Instruction::add(x, y))
             },
-            CP_ID => {
+            COPY_ID => {
                 let src = RegisterName::try_from_u8(bytes[1])?;
                 let dst = RegisterName::try_from_u8(bytes[2])?;
                 Ok(Instruction::copy(src, dst))
             },
-            JMP_ID => {
+            JUMP_ID => {
                 let addr = RegisterName::try_from_u8(bytes[1])?;
                 let cond = RegisterName::try_from_u8(bytes[2])?;
                 Ok(Instruction::jump(addr, cond))
@@ -171,7 +171,7 @@ impl Instruction {
                 let y = RegisterName::try_from_u8(bytes[2])?;
                 Ok(Instruction::mul(x, y))
             },
-            NOP_ID => Ok(Instruction::noop),
+            NOOP_ID => Ok(Instruction::noop),
             PUT_ID => {
                 let val = u16::from_ne_bytes([bytes[1],bytes[2]]);
                 let dst = RegisterName::try_from_u8(bytes[3])?;
@@ -182,15 +182,15 @@ impl Instruction {
                 let y = RegisterName::try_from_u8(bytes[2])?;
                 Ok(Instruction::sub(x, y))
             },
-            STORE_ID => {
+            WRITE_ID => {
                 let src = RegisterName::try_from_u8(bytes[1])?;
                 let addr = RegisterName::try_from_u8(bytes[2])?;
-                Ok(Instruction::store(src, addr))
+                Ok(Instruction::write(src, addr))
             },
-            LOAD_ID => {
+            READ_ID => {
                 let addr = RegisterName::try_from_u8(bytes[1])?;
                 let dst = RegisterName::try_from_u8(bytes[2])?;
-                Ok(Instruction::load(addr, dst))
+                Ok(Instruction::read(addr, dst))
             },
             _ => Err(
                     DecodeError::NoSuchInstruction(instr as u8)
@@ -255,15 +255,15 @@ mod tests {
                 )
             ),
             (
-                "store gp0 gp1",
-                Instruction::store(
+                "write gp0 gp1",
+                Instruction::write(
                     RegisterName::gp0,
                     RegisterName::gp1
                 )
             ),
             (
-                "load gp0 gp1",
-                Instruction::load(
+                "read gp0 gp1",
+                Instruction::read(
                     RegisterName::gp0,
                     RegisterName::gp1
                 )
@@ -366,24 +366,24 @@ mod tests {
                 ])
             ),
             (
-                Instruction::store(
+                Instruction::write(
                     RegisterName::gp2,
                     RegisterName::gp1
                 ),
                 u32::from_ne_bytes([
-                    InstructionName::store as u8,
+                    InstructionName::write as u8,
                     RegisterName::gp2 as u8,
                     RegisterName::gp1 as u8,
                     0
                 ])
             ),
             (
-                Instruction::load(
+                Instruction::read(
                     RegisterName::gp2,
                     RegisterName::gp1
                 ),
                 u32::from_ne_bytes([
-                    InstructionName::load as u8,
+                    InstructionName::read as u8,
                     RegisterName::gp2 as u8,
                     RegisterName::gp1 as u8,
                     0
@@ -487,24 +487,24 @@ mod tests {
                 ])
             ),
             (
-                Instruction::store(
+                Instruction::write(
                     RegisterName::gp2,
                     RegisterName::gp1
                 ),
                 u32::from_ne_bytes([
-                    InstructionName::store as u8,
+                    InstructionName::write as u8,
                     RegisterName::gp2 as u8,
                     RegisterName::gp1 as u8,
                     0
                 ])
             ),
             (
-                Instruction::load(
+                Instruction::read(
                     RegisterName::gp2,
                     RegisterName::gp1
                 ),
                 u32::from_ne_bytes([
-                    InstructionName::load as u8,
+                    InstructionName::read as u8,
                     RegisterName::gp2 as u8,
                     RegisterName::gp1 as u8,
                     0

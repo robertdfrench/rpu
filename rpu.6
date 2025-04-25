@@ -45,8 +45,8 @@ This is your best bet for adding two numbers.
 can only count to 65,536, so it will throw a fit and exit if
 your sum is bigger than that.)
 .
-.\" cp
-.It Ic \&cp Ar src dst
+.\" copy
+.It Ic \&copy Ar src dst
 Copies the contents or the
 .Ar src
 register into the
@@ -66,14 +66,14 @@ immediately.
 Unplugs the power.
 Perhaps a bit impolite, but machines don't have feelings.
 .
-.\" jmp
-.It Ic \&jmp Ar dst cond
+.\" jump
+.It Ic \&jump Ar dst cond
 Normally, 
 .Nm
 will just execute the next instruction in the line.
 If you are impatient and want to jump line, this is the
 instruction for you!
-.Ic \&jmp
+.Ic \&jump
 will tell
 .Nm
 to begin executing instructions at the address contained in the
@@ -95,8 +95,8 @@ and store the answer in
 can only count to 65,536, so it will throw a fit and exit if
 your product is bigger than that.)
 .
-.\" nop
-.It Ic \&nop
+.\" noop
+.It Ic \&noop
 Does nothing! Sometimes it's good to take a break.
 .
 .\" put
@@ -107,6 +107,19 @@ into the register
 .Ar dst .
 If you need to hardcode some values into your program, this is
 the easiest way to get them into a register.
+.
+.\" read
+.It Ic \&read Ar addr dst
+Read two bytes starting at
+.Ar addr
+into the register
+.Ar dst .
+So if the register
+.Ar gp0
+contains the value 100, and memory address 100 contains the
+value 7, then "read gp0 gp1" will store the number 7 into the
+.Ar gp1
+register.
 .
 .\" sub
 .It Ic \&sub Ar x y
@@ -125,6 +138,23 @@ can't do negative numbers, so if
 is bigger than
 .Ar y
 you are gonna be in trouble.
+.
+.\" write
+.It Ic \&write Ar src addr
+Writes the contents of the
+.Ar src
+register into the memory location defined in the
+.Ar addr
+register.
+So if
+.Ar src
+contains '5' and
+.Ar addr
+contains '100', then this instruction will write the number 5
+into the 100th byte of memory. (since this is a 16-bit machine,
+it will simultaneously write the number 0 into the 101st byte of
+memory).
+.
 .El
 .
 .
@@ -247,7 +277,7 @@ next by the
 .Nm .
 This is a read-only register; the only way to change its
 contents is via the
-.Ic \&jmp
+.Ic \&jump
 instruction.
 .El
 .
@@ -264,8 +294,8 @@ pseudo-register (so that it goes to the active device, which in
 this case is assumed to be the console).
 .Bd -literal -offset -indent
 
-put   5   gp0
-cp    gp0 out
+put  5   gp0
+copy gp0 out
 halt
 .Ed
 .
@@ -274,10 +304,10 @@ Same as above, but we add the contents of two registers together
 and print the result before halting.
 .Bd -literal -offset -indent
 
-put 5   gp0
-put 7   gp1
-add gp0 gp1
-cp  ans out
+put  5   gp0
+put  7   gp1
+add  gp0 gp1
+copy ans out
 halt
 .Ed
 .
@@ -289,22 +319,22 @@ will become confused and crash:
 .Bd -literal -offset -indent
 
 # Setup
-put 0   gp0
-put 1   gp1
-put 0   gp7
+put 0 gp0
+put 1 gp1
+put 0 gp7
 
 # Print inital values
-cp  gp0 out
-cp  gp1 out
+copy gp0 out
+copy gp1 out
 
 # Main loop
-add gp0 gp1 :LOOP
-cp  ans out
-cp  gp1 gp0
-cp  ans gp1
-add gp7 gp7
-put :LOOP   gp6
-jmp gp6
+add  gp0   gp1 .LOOP
+copy ans   out
+copy gp1   gp0
+copy ans   gp1
+add  gp7   gp7
+put  .LOOP gp6
+jump gp6
 .Ed
 .
 .
