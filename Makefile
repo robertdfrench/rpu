@@ -11,3 +11,6 @@ check: test #: Run all tests
 
 test: #: Just run cargo-based tests
 	cargo test
+
+build: #: Build an optimized binary
+	cargo build --release
