@@ -11,7 +11,9 @@ pub struct Program {
 }
 
 fn skippable(line: &str) -> bool {
-    line.starts_with("#") || line.len() == 0
+    line.starts_with("#") 
+        || line.starts_with(";")
+        || line.len() == 0
 }
 
 fn tokenize(line: &str) -> Vec<String> {
