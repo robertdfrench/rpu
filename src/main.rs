@@ -59,7 +59,29 @@ fn run(
                     KeyCode::Esc => {
                         break Ok(())
                     },
-                    _ => {
+                    KeyCode::Char('q') => {
+                        break Ok(())
+                    },
+                    KeyCode::Down => {
+                        let new = computer.code_list_state
+                            .offset() + 1;
+                        let current = computer.code_list_state
+                            .offset_mut();
+                        *current = new;
+                    },
+                    KeyCode::Up => {
+                        let old = computer.code_list_state
+                            .offset();
+                        let new = if old == 0 {
+                            0
+                        } else {
+                            old - 1
+                        };
+                        let current = computer.code_list_state
+                            .offset_mut();
+                        *current = new;
+                    },
+                    KeyCode::Char('n') => {
                         let r = computer.core
                             .execute_single_instruction(
                                 &mut computer.lcd0,
@@ -75,6 +97,7 @@ fn run(
                             }
                         }
                     },
+                    _ => {},
                 }
             },
             _ => {}
