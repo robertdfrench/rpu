@@ -1,12 +1,21 @@
 .Dd $Mdocdate$
 .Dt RPU 6
 .Os "Your buddy Robert"
+.
+.
+.
 .Sh NAME
 .Nm rpu
 .Nd Your buddy Robert's processing unit
+.
+.
+.
 .Sh SYNOPSIS
 .Nm rpu
-.Ar
+.Ar program.s
+.
+.
+.
 .Sh DESCRIPTION
 The
 .Nm
@@ -24,7 +33,15 @@ The goal is more about getting a rough idea and less about
 building anything useful.
 .
 .
-.Sh INSTRUCTIONS
+.
+.Sh USAGE
+Once you have loaded a program into rpu, press 'n' to execute
+the next instruction. Press 'Esc' to quit and return to the
+command line.
+.
+.
+.
+.Sh INSTRUCTION SET
 .Nm
 contains only a few instructions:
 .
@@ -158,6 +175,7 @@ memory).
 .El
 .
 .
+.
 .Sh REGISTERS
 Registers on the
 .Nm
@@ -179,6 +197,7 @@ Special purpose registers are provided to you by your buddy
 Robert in order to facilitate some specific task. Sometimes
 their contents change in response to instructions, and some
 instructions do implicitly rely on their contents.
+.
 .
 .Ss General Purpose Registers
 .Nm
@@ -222,6 +241,7 @@ user, you are entitled to them without restriction.
 .Dq "PITHY_NAME_7"
 .
 .El
+.
 .
 .Ss Special Purpose Registers
 These registers have specific use-cases. They are not generally
@@ -282,6 +302,7 @@ instruction.
 .El
 .
 .
+.
 .Sh EXAMPLES
 This machine is kinda weird, so a few example programs might
 help you get started.
@@ -338,9 +359,11 @@ jump gp6
 .Ed
 .
 .
+.
 .Sh SEE ALSO
 .Bl -tag -width 3n
 .It Lk https://github.com/robertdfrench/rpu "Source Code"
 .It Lk https://store.steampowered.com/app/1444480/Turing_Complete/ "Turing Complete"
 .It Lk https://nostarch.com/foundationsofcomp "The Secret Life of Programs"
+Patel
 .El

@@ -6,6 +6,20 @@ help: #: Display this help menu
 		| column -s':' -t \
 		| sort
 
+PREFIX=/usr/local
+MANPATH=$(PREFIX)/share/man/man6
+BINPATH=$(PREFIX)/bin
+
+install: $(MANPATH)/rpu.6 $(BINPATH)/rpu  #: Install rpu
+	@echo "Run 'man rpu' for usage information"
+
+$(MANPATH)/rpu.6: rpu.6
+	install -o root -g root -m 0755 -d $(MANPATH)
+	install -o root -g root -m 0644 rpu.6 $@
+
+$(BINPATH)/rpu: rpu
+	install -o root -g root -m 0755 rpu $@
+
 
 check: test #: Run all tests
 
@@ -22,7 +36,8 @@ _tarball:
 	mkdir -p build
 	mkdir -p build/rpu-$(RPU_VERSION)
 	mkdir -p build/rpu-$(RPU_VERSION)/examples
-	cp release-template/* build/rpu-$(RPU_VERSION)
+	cp Makefile build/rpu-$(RPU_VERSION)
+	cp README.md build/rpu-$(RPU_VERSION)
 	cp rpu.6 build/rpu-$(RPU_VERSION)
 	cp examples/* build/rpu-$(RPU_VERSION)/examples
 	cp target/release/rpu build/rpu-$(RPU_VERSION)
