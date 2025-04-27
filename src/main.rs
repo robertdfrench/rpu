@@ -1,27 +1,28 @@
 use ratatui::widgets::Block; 
 use ratatui::widgets::Borders; 
-use rpu::core::Core; 
-use ratatui::layout::Constraint; 
-use ratatui::DefaultTerminal; 
-use ratatui::layout::Direction; 
+use rpu::core::       Core; 
+use ratatui::layout:: Constraint; 
+use ratatui::         DefaultTerminal; 
+use ratatui::layout:: Direction; 
 use crossterm::event::Event; 
 use crossterm::event::KeyCode; 
-use ratatui::Frame; 
-use ratatui::layout::Layout; 
+use ratatui::         Frame; 
+use ratatui::layout:: Layout; 
 use ratatui::widgets::List;
 use ratatui::widgets::ListState;
 use ratatui::widgets::Paragraph; 
-use clap::Parser;
-use std::path::PathBuf;
-use rpu::programs::Program; 
-use ratatui::layout::Rect; 
-use color_eyre::Result; 
+use clap::            Parser;
+use std::path::       PathBuf;
+use rpu::programs::   Program; 
+use ratatui::layout:: Rect; 
+use color_eyre::      Result; 
 use ratatui::widgets::Row; 
-use ratatui::style::Style; 
-use ratatui::style::Stylize; 
+use ratatui::style::  Style; 
+use ratatui::style::  Stylize; 
 use ratatui::widgets::Table; 
-use crossterm::event; 
-use std::fs; 
+use ratatui::widgets::TableState; 
+use crossterm::       event; 
+use std::             fs; 
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -81,6 +82,14 @@ fn run(
                             .offset_mut();
                         *current = new;
                     },
+                    KeyCode::PageDown => {
+                        computer.memory_table_state
+                            .select_next();
+                    },
+                    KeyCode::PageUp => {
+                        computer.memory_table_state
+                            .select_previous();
+                    },
                     KeyCode::Char('n') => {
                         let r = computer.core
                             .execute_single_instruction(
@@ -110,19 +119,20 @@ struct Computer {
     program: Program,
     lcd0: u16,
     lcd1: u16,
-    code_list_state: ListState
+    code_list_state: ListState,
+    memory_table_state: TableState,
 }
 
 impl Computer {
     fn new(core: Core, program: Program) -> Self {
-        let lcd0: u16 = 0;
-        let lcd1: u16 = 0;
-        let code_list_state = ListState::default();
         Self {
             core,
             program,
-            lcd0, lcd1,
-            code_list_state
+            lcd0: 0,
+            lcd1: 0,
+            code_list_state: ListState::default(),
+            memory_table_state: TableState::new()
+                .with_selected(Some(0)),
         }
     }
 }
@@ -250,6 +260,7 @@ fn render(computer: &mut Computer, frame: &mut Frame) {
     // Memory
     render_memory(
         &computer.core.memory,
+        &mut computer.memory_table_state,
         layouts.memory,
         frame,
         "Memory"
@@ -359,6 +370,7 @@ fn render_registers(
 
 fn render_memory(
     memory: &[u8; 65_536],
+    state: &mut TableState,
     area: Rect,
     frame: &mut Frame,
     title: &str,
@@ -408,9 +420,9 @@ fn render_memory(
                 .style(Style::new().bold())
                 .bottom_margin(1)
         )
-        .highlight_symbol(">>")
+        .row_highlight_style(Style::new().red().italic())
         .block( common_block(title));
-    frame.render_widget(table, area);
+    frame.render_stateful_widget(table, area, state);
 
 }
 
