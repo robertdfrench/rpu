@@ -8,7 +8,8 @@ use crossterm::event::Event;
 use crossterm::event::KeyCode; 
 use ratatui::Frame; 
 use ratatui::layout::Layout; 
-use ratatui::text::Line; 
+use ratatui::widgets::List;
+use ratatui::widgets::ListState;
 use ratatui::widgets::Paragraph; 
 use clap::Parser;
 use std::path::PathBuf;
@@ -19,7 +20,6 @@ use ratatui::widgets::Row;
 use ratatui::style::Style; 
 use ratatui::style::Stylize; 
 use ratatui::widgets::Table; 
-use ratatui::text::Text; 
 use crossterm::event; 
 use std::fs; 
 
@@ -52,7 +52,7 @@ fn run(
     mut computer: Computer,
 ) -> Result<()> {
     loop {
-        terminal.draw(|f| { render(&computer,f); })?;
+        terminal.draw(|f| { render(&mut computer,f); })?;
         match event::read()? {
             Event::Key(ke) => {  
                 match ke.code {
@@ -87,16 +87,19 @@ struct Computer {
     program: Program,
     lcd0: u16,
     lcd1: u16,
+    code_list_state: ListState
 }
 
 impl Computer {
     fn new(core: Core, program: Program) -> Self {
         let lcd0: u16 = 0;
         let lcd1: u16 = 0;
+        let code_list_state = ListState::default();
         Self {
             core,
             program,
-            lcd0, lcd1
+            lcd0, lcd1,
+            code_list_state
         }
     }
 }
@@ -159,13 +162,14 @@ impl Layouts {
     }
 }
 
-fn render(computer: &Computer, frame: &mut Frame) {
+fn render(computer: &mut Computer, frame: &mut Frame) {
     let layouts = Layouts::new(frame);
 
 
     render_code(
         &computer.program,
         computer.core.register_file.pc,
+        &mut computer.code_list_state,
         layouts.code,
         frame,
         "Code"
@@ -232,24 +236,19 @@ fn render(computer: &Computer, frame: &mut Frame) {
 fn render_code(
     program: &Program,
     pc: u16,
+    state: &mut ListState,
     area: Rect, 
     frame: &mut Frame,
     title: &str,
 ) {
-    let mut lines = vec![];
     let current_line = program.source_addrs.get(&pc);
-    let source_lines = &program.source_lines;
-    for (n, source_line) in source_lines.into_iter().enumerate() {
-        let mut line = Line::from(source_line.clone());
-        if current_line == Some(&n) {
-            line = line.style(Style::new().red().italic());
-        }
-        lines.push(line)
-    }
-    let text = Text::from(lines);
-    let paragraph = Paragraph::new(text)
-        .block(common_block(title));
-    frame.render_widget(paragraph, area);
+    state.select(current_line.copied());
+    let items = program.source_lines.clone();
+    let list = List::new(items)
+        .block(common_block(title))
+        .highlight_style(Style::new().italic().red());
+
+    frame.render_stateful_widget(list, area, state);
 }
 
 
