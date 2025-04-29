@@ -251,6 +251,7 @@ fn render(computer: &mut Computer, frame: &mut Frame) {
         ("ans", computer.core.register_file.ans),
         ("dvc", computer.core.register_file.dvc),
         ("pc", computer.core.register_file.pc),
+        ("sp", computer.core.register_file.sp),
     ];
     render_registers(
         sp_registers,
