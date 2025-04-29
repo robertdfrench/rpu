@@ -23,6 +23,8 @@ crazy:
 * `jump`: Skip ahead a few instructions. Or back. Simple!
 * `mul`: Multiple two numbers. Third grade stuff!
 * `noop`: Literally DO NOTHING. Like falling off a log.
+* `pop`: Take a value off the stack.
+* `push`: Place a value on the stack.
 * `put`: Write a value to a register. Couldn't be simpler.
 * `read`: Pull some data from memory
 * `sub`: Subtract two numbers.

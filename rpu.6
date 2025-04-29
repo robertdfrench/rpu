@@ -127,6 +127,28 @@ your product is bigger than that.)
 .It Ic \&noop
 Does nothing! Sometimes it's good to take a break.
 .
+.\" pop
+.It Ic \&pop Ar dst
+Copies the value from the memory address given by
+.Ar sp
+into the 
+.Ar dst
+register. It will then increment the
+.Ar sp
+register so that subsequent pops retrieve the next available
+stack item.
+.
+.\" push
+.It Ic \&push Ar src
+Copies the value from
+.Ar src
+into the address given by the
+.Ar sp
+register. It will then decrement the
+.Ar sp
+register so that subsequent pushes go to the next available
+address.
+.
 .\" put
 .It Ic \&put Ms x Ar dst
 Places the literal number
@@ -310,6 +332,18 @@ This is a read-only register; the only way to change its
 contents is via the
 .Ic \&jump
 instruction.
+.
+.
+.\" sp
+.It Ic \&sp
+This is the
+.Dq "Stack Pointer" ,
+which keeps track of where the next stack element should go. The
+stack is a contiguous list of values that grows down from the
+highest address in memory. The stack is
+.Dq "Last In, First Out" ,
+meaning that if you push the values 7, 14, and 21 onto the
+stack, you can pop them off in reverse order: 21, 14, 7.
 .El
 .
 .
