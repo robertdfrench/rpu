@@ -5,7 +5,6 @@ put 1 gp1
 push gp1
 
 put .MAIN gp7
-put 0 gp6
 
 # Main loop
 noop .MAIN
@@ -30,4 +29,4 @@ push gp1
 push ans
 
 # Repeat
-jump gp7 gp6
+jump gp7 zero

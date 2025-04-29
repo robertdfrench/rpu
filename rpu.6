@@ -344,6 +344,15 @@ highest address in memory. The stack is
 .Dq "Last In, First Out" ,
 meaning that if you push the values 7, 14, and 21 onto the
 stack, you can pop them off in reverse order: 21, 14, 7.
+.
+.
+.\" zero
+.It Ic \&zero
+This read-only register always contains the value 0. You can use
+it in conjunction with the
+.Ic \&jump
+instruction when you always want to jump and aren't comparing
+against a loop value.
 .El
 .
 .

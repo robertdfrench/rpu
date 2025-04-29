@@ -10,10 +10,10 @@ pub struct RegisterFile {
     pub gp6: u16,
     pub gp7: u16,
 
-    pub ans: u16,
-    pub pc:  u16,
-    pub dvc: u16,
-    pub sp:  u16
+    pub ans:  u16,
+    pub pc:   u16,
+    pub dvc:  u16,
+    pub sp:   u16,
 }
 
 impl RegisterFile {
@@ -28,10 +28,10 @@ impl RegisterFile {
             gp6: 0,
             gp7: 0,
 
-            ans: 0,
-            dvc: 0,
-            pc:  0,
-            sp:  65_534,
+            ans:  0,
+            dvc:  0,
+            pc:   0,
+            sp:   65_534,
         }
     }
 
@@ -55,6 +55,9 @@ impl RegisterFile {
             },
             RegisterName::pc  => { self.pc = val},
             RegisterName::sp  => { self.sp = val},
+            RegisterName::zero => {
+                return Err(AccessError::PseudoRegister(name))
+            },
         }
         Ok(())
     }
@@ -77,8 +80,9 @@ impl RegisterFile {
             RegisterName::out => {
                 return Err(AccessError::PseudoRegister(name))
             },
-            RegisterName::pc  => self.pc,
-            RegisterName::sp  => self.sp,
+            RegisterName::pc   => self.pc,
+            RegisterName::sp   => self.sp,
+            RegisterName::zero => 0,
         };
         Ok(val)
     }
@@ -102,6 +106,7 @@ pub enum RegisterName {
     out,
     pc,
     sp,
+    zero,
 }
 
 const GP0_ID: u8 = RegisterName::gp0 as u8;
@@ -112,11 +117,13 @@ const GP4_ID: u8 = RegisterName::gp4 as u8;
 const GP5_ID: u8 = RegisterName::gp5 as u8;
 const GP6_ID: u8 = RegisterName::gp6 as u8;
 const GP7_ID: u8 = RegisterName::gp7 as u8;
-const ANS_ID: u8 = RegisterName::ans as u8;
-const DVC_ID: u8 = RegisterName::dvc as u8;
-const OUT_ID: u8 = RegisterName::out as u8;
-const PC_ID:  u8 = RegisterName::pc  as u8;
-const SP_ID:  u8 = RegisterName::sp  as u8;
+
+const ANS_ID:  u8 = RegisterName::ans  as u8;
+const DVC_ID:  u8 = RegisterName::dvc  as u8;
+const OUT_ID:  u8 = RegisterName::out  as u8;
+const PC_ID:   u8 = RegisterName::pc   as u8;
+const SP_ID:   u8 = RegisterName::sp   as u8;
+const ZERO_ID: u8 = RegisterName::zero as u8;
 
 #[derive(Debug, PartialEq)]
 pub enum ParseError {
@@ -145,11 +152,12 @@ impl RegisterName {
             "gp6" => Ok(RegisterName::gp6),
             "gp7" => Ok(RegisterName::gp7),
 
-            "ans" => Ok(RegisterName::ans),
-            "dvc" => Ok(RegisterName::dvc),
-            "out" => Ok(RegisterName::out),
-            "pc"  => Ok(RegisterName::pc),
-            "sp"  => Ok(RegisterName::sp),
+            "ans"  => Ok(RegisterName::ans),
+            "dvc"  => Ok(RegisterName::dvc),
+            "out"  => Ok(RegisterName::out),
+            "pc"   => Ok(RegisterName::pc),
+            "sp"   => Ok(RegisterName::sp),
+            "zero" => Ok(RegisterName::zero),
             _ => Err(ParseError::NoSuchRegisterName(s.to_string()))
         }
     }
@@ -165,11 +173,12 @@ impl RegisterName {
             GP6_ID => Ok(RegisterName::gp6),
             GP7_ID => Ok(RegisterName::gp7),
 
-            ANS_ID => Ok(RegisterName::ans),
-            DVC_ID => Ok(RegisterName::dvc),
-            OUT_ID => Ok(RegisterName::out),
-            PC_ID  => Ok(RegisterName::pc),
-            SP_ID  => Ok(RegisterName::sp),
+            ANS_ID  => Ok(RegisterName::ans),
+            DVC_ID  => Ok(RegisterName::dvc),
+            OUT_ID  => Ok(RegisterName::out),
+            PC_ID   => Ok(RegisterName::pc),
+            SP_ID   => Ok(RegisterName::sp),
+            ZERO_ID => Ok(RegisterName::zero),
             _ => Err(DecodeError::NoSuchRegisterID(x))
         }
     }
@@ -190,11 +199,13 @@ mod tests {
             ("gp5", RegisterName::gp5),
             ("gp6", RegisterName::gp6),
             ("gp7", RegisterName::gp7),
+
             ("ans", RegisterName::ans),
             ("dvc", RegisterName::dvc),
             ("out", RegisterName::out),
             ("pc",  RegisterName::pc),
             ("sp",  RegisterName::sp),
+            ("zero",  RegisterName::zero),
         ];
         for (text, expected) in pairs {
             let actual: RegisterName =
@@ -221,11 +232,13 @@ mod tests {
             (GP5_ID, RegisterName::gp5),
             (GP6_ID, RegisterName::gp6),
             (GP7_ID, RegisterName::gp7),
-            (ANS_ID, RegisterName::ans),
-            (DVC_ID, RegisterName::dvc),
-            (OUT_ID, RegisterName::out),
-            (PC_ID,  RegisterName::pc),
-            (SP_ID,  RegisterName::sp),
+
+            (ANS_ID,  RegisterName::ans),
+            (DVC_ID,  RegisterName::dvc),
+            (OUT_ID,  RegisterName::out),
+            (PC_ID,   RegisterName::pc),
+            (SP_ID,   RegisterName::sp),
+            (ZERO_ID, RegisterName::zero),
         ];
         for (byte, expected) in pairs {
             let actual: RegisterName =
@@ -245,11 +258,13 @@ mod tests {
             (GP5_ID, RegisterName::gp5),
             (GP6_ID, RegisterName::gp6),
             (GP7_ID, RegisterName::gp7),
-            (ANS_ID, RegisterName::ans),
-            (DVC_ID, RegisterName::dvc),
-            (OUT_ID, RegisterName::out),
-            (PC_ID,  RegisterName::pc),
-            (SP_ID,  RegisterName::sp),
+
+            (ANS_ID,  RegisterName::ans),
+            (DVC_ID,  RegisterName::dvc),
+            (OUT_ID,  RegisterName::out),
+            (PC_ID,   RegisterName::pc),
+            (SP_ID,   RegisterName::sp),
+            (ZERO_ID, RegisterName::zero),
         ];
         for (expected, register) in pairs {
             let actual: u8 = register as u8;

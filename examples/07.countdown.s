@@ -14,12 +14,6 @@ put  .LOOP gp2
 ; program once the countdown has completed
 put  .END  gp3
 
-; Make sure that gp4 contains the value zero, so that we can use
-; it when we want to jump *no matter what*. This isn't strictly
-; necessary, since gp4 will be zero anyways, but it makes the
-; code clearer when we are explicit.
-put  0     gp4
-
 ; Select LCD0 as our default output device
 put  0     dvc
 
@@ -37,7 +31,7 @@ copy ans gp0
 jump gp3 gp0
 
 ; Go to .LOOP otherwise
-jump gp2 gp4
+jump gp2 zero
 
 noop .END
 halt
