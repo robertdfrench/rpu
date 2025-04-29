@@ -13,6 +13,8 @@ pub enum InstructionName {
     read,
     mul,
     noop,
+    pop,
+    push,
     put,
     write,
     sub,
@@ -24,6 +26,8 @@ const COPY_ID:  u8 = InstructionName::copy  as u8;
 const JUMP_ID:  u8 = InstructionName::jump  as u8;
 const MUL_ID:   u8 = InstructionName::mul   as u8;
 const NOOP_ID:  u8 = InstructionName::noop  as u8;
+const POP_ID:   u8 = InstructionName::pop   as u8;
+const PUSH_ID:  u8 = InstructionName::push  as u8;
 const PUT_ID:   u8 = InstructionName::put   as u8;
 const SUB_ID:   u8 = InstructionName::sub   as u8;
 const WRITE_ID: u8 = InstructionName::write as u8;
@@ -39,12 +43,14 @@ pub enum Instruction {
     mul(RegisterName, RegisterName),
     noop,
     put(u16, RegisterName),
+    pop(RegisterName),
+    push(RegisterName),
     sub(RegisterName, RegisterName),
     write(RegisterName, RegisterName),
     read(RegisterName, RegisterName),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParseError {
     NoSuchInstruction(String),
     RegisterParseError(registers::ParseError),
@@ -63,7 +69,7 @@ impl From<ParseIntError> for ParseError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum DecodeError {
     NoSuchInstruction(u8),
     RegisterDecodeError(registers::DecodeError)
@@ -104,6 +110,14 @@ impl Instruction {
                 Ok(Instruction::mul(x, y))
             },
             "noop" => Ok(Instruction::noop),
+            "pop" => {
+                let dst = RegisterName::try_parse(p[1])?;
+                Ok(Instruction::pop(dst))
+            },
+            "push" => {
+                let src = RegisterName::try_parse(p[1])?;
+                Ok(Instruction::push(src))
+            },
             "put" => {
                 let val: u16 = p[1].parse()?;
                 let dst = RegisterName::try_parse(p[2])?;
@@ -148,6 +162,12 @@ impl Instruction {
             Instruction::noop => {
                 u32::from_ne_bytes([NOOP_ID,0,0,0])
             }
+            Instruction::pop(dst) => {
+                u32::from_ne_bytes([POP_ID,*dst as u8,0,0])
+            },
+            Instruction::push(src) => {
+                u32::from_ne_bytes([PUSH_ID,*src as u8,0,0])
+            },
             Instruction::put(val, dst) => {
                 let v = val.to_ne_bytes();
                 u32::from_ne_bytes([PUT_ID,v[0],v[1],*dst as u8])
@@ -190,6 +210,14 @@ impl Instruction {
                 Ok(Instruction::mul(x, y))
             },
             NOOP_ID => Ok(Instruction::noop),
+            POP_ID => {
+                let dst = RegisterName::try_decode(bytes[1])?;
+                Ok(Instruction::pop(dst))
+            },
+            PUSH_ID => {
+                let src = RegisterName::try_decode(bytes[1])?;
+                Ok(Instruction::push(src))
+            },
             PUT_ID => {
                 let val = u16::from_ne_bytes([bytes[1],bytes[2]]);
                 let dst = RegisterName::try_decode(bytes[3])?;
@@ -259,6 +287,14 @@ mod tests {
             (
                 "noop",
                 Instruction::noop
+            ),
+            (
+                "pop gp0",
+                Instruction::pop(RegisterName::gp0)
+            ),
+            (
+                "push gp0",
+                Instruction::push(RegisterName::gp0)
             ),
             (
                 "put 7 gp0",
@@ -357,6 +393,28 @@ mod tests {
                 u32::from_ne_bytes([
                     InstructionName::noop as u8,
                     0,
+                    0,
+                    0
+                ])
+            ),
+            (
+                Instruction::pop(
+                    RegisterName::gp2
+                ),
+                u32::from_ne_bytes([
+                    InstructionName::pop as u8,
+                    RegisterName::gp2 as u8,
+                    0,
+                    0
+                ])
+            ),
+            (
+                Instruction::push(
+                    RegisterName::gp2
+                ),
+                u32::from_ne_bytes([
+                    InstructionName::push as u8,
+                    RegisterName::gp2 as u8,
                     0,
                     0
                 ])
@@ -478,6 +536,28 @@ mod tests {
                 u32::from_ne_bytes([
                     InstructionName::noop as u8,
                     0,
+                    0,
+                    0
+                ])
+            ),
+            (
+                Instruction::pop(
+                    RegisterName::gp2,
+                ),
+                u32::from_ne_bytes([
+                    InstructionName::pop as u8,
+                    RegisterName::gp2 as u8,
+                    0,
+                    0
+                ])
+            ),
+            (
+                Instruction::push(
+                    RegisterName::gp2,
+                ),
+                u32::from_ne_bytes([
+                    InstructionName::push as u8,
+                    RegisterName::gp2 as u8,
                     0,
                     0
                 ])

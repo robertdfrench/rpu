@@ -7,7 +7,7 @@ use crate::instructions;
 use crate::registers;
 use crate::devices::Device;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ExecutionError {
     CannotPut(RegisterName),
 
@@ -20,6 +20,10 @@ pub enum ExecutionError {
     Overflow(u16, u16),
 
     Underflow(u16, u16),
+
+    StackOverflow,
+
+    StackUnderflow,
 
     Decode(instructions::DecodeError),
 
@@ -244,6 +248,48 @@ impl Core {
         Ok(())
     }
 
+    fn pop(&mut self, dst: RegisterName)
+        -> Result<(), ExecutionError>
+    {
+        let sp = self.register_file.read(RegisterName::sp)?;
+        if sp == 65_534 {
+            return Err(ExecutionError::StackUnderflow);
+        }
+
+        self.register_file.write(RegisterName::sp, sp + 2)?;
+        let sp = self.register_file.read(RegisterName::sp)?;
+
+        let mut val: [u8; 2] = [0; 2];
+        val[0] = self.memory[sp as usize];
+        val[1] = self.memory[(sp + 1) as usize];
+        let val = u16::from_ne_bytes(val);
+
+        self.put(val, dst)
+    }
+
+    fn push(&mut self, src: RegisterName)
+        -> Result<(), ExecutionError>
+    {
+        let sp = self.register_file.read(RegisterName::sp)?;
+        if sp == 0 {
+            return Err(ExecutionError::StackOverflow);
+        }
+
+        let val: u16 = match src {
+            RegisterName::out => {
+                return Err(ExecutionError::CannotCpFrom(src));
+            },
+            _ => self.register_file.read(src)?
+        };
+
+        self.memory[sp as usize] = val.to_ne_bytes()[0];
+        self.memory[(sp + 1) as usize] = val.to_ne_bytes()[1];
+
+        self.register_file.write(RegisterName::sp, sp - 2)?;
+
+        Ok(())
+    }
+
     fn write(&mut self, src: RegisterName, addr: RegisterName)
         -> Result<(), ExecutionError>
     {
@@ -302,6 +348,8 @@ impl Core {
             Instruction::jump(dst, cond) => self.jump(dst, cond)?,
             Instruction::mul(x, y) => self.mul(x, y)?,
             Instruction::noop => (),
+            Instruction::pop(dst) => self.pop(dst)?,
+            Instruction::push(src) => self.push(src)?,
             Instruction::put(val, dst) => self.put(val, dst)?,
             Instruction::sub(x, y) => self.sub(x, y)?,
             Instruction::write(src, addr) => self.write(src, addr)?,
@@ -370,13 +418,58 @@ mod tests {
 
         let mut _lcd0 = Buffer(vec![]);
         let mut _lcd1 = Buffer(vec![]);
-        core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
-        core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
-        core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
-        core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
+        let mut devices: Vec<&mut dyn Device> = vec![
+            &mut _lcd0,
+            &mut _lcd1
+        ];
+        core.execute_single_instruction(&mut devices).unwrap();
+        core.execute_single_instruction(&mut devices).unwrap();
+        core.execute_single_instruction(&mut devices).unwrap();
+        core.execute_single_instruction(&mut devices).unwrap();
 
         assert_eq!(core.memory[100], 2);
         assert_eq!(core.memory[101], 1);
         assert_eq!(core.register_file.gp2, 258);
+    }
+
+    #[test]
+    fn test_stack_underflow() {
+        let mut core = Core::new();
+        let error = core.pop(RegisterName::gp0);
+        assert_eq!(error, Err(ExecutionError::StackUnderflow));
+    }
+
+    #[test]
+    fn test_stack_overflow() {
+        let mut core = Core::new();
+        core.register_file.write(RegisterName::sp, 0).unwrap();
+        let error = core.push(RegisterName::gp0);
+        assert_eq!(error, Err(ExecutionError::StackOverflow));
+    }
+
+    #[test]
+    fn test_stack() {
+        let mut core = Core::new();
+        core.put(7, RegisterName::gp0).unwrap();
+        core.push(RegisterName::gp0).unwrap();
+        core.put(14, RegisterName::gp0).unwrap();
+        core.push(RegisterName::gp0).unwrap();
+        core.put(21, RegisterName::gp0).unwrap();
+        core.push(RegisterName::gp0).unwrap();
+
+        core.pop(RegisterName::gp1).unwrap();
+        let gp1 = core.register_file.read(RegisterName::gp1)
+            .unwrap();
+        assert_eq!(gp1, 21);
+
+        core.pop(RegisterName::gp1).unwrap();
+        let gp1 = core.register_file.read(RegisterName::gp1)
+            .unwrap();
+        assert_eq!(gp1, 14);
+
+        core.pop(RegisterName::gp1).unwrap();
+        let gp1 = core.register_file.read(RegisterName::gp1)
+            .unwrap();
+        assert_eq!(gp1, 7);
     }
 }

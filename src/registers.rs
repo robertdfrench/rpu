@@ -13,6 +13,7 @@ pub struct RegisterFile {
     pub ans: u16,
     pub pc:  u16,
     pub dvc: u16,
+    pub sp:  u16
 }
 
 impl RegisterFile {
@@ -30,6 +31,7 @@ impl RegisterFile {
             ans: 0,
             dvc: 0,
             pc:  0,
+            sp:  65_534,
         }
     }
 
@@ -52,6 +54,7 @@ impl RegisterFile {
                 return Err(AccessError::PseudoRegister(name))
             },
             RegisterName::pc  => { self.pc = val},
+            RegisterName::sp  => { self.sp = val},
         }
         Ok(())
     }
@@ -75,6 +78,7 @@ impl RegisterFile {
                 return Err(AccessError::PseudoRegister(name))
             },
             RegisterName::pc  => self.pc,
+            RegisterName::sp  => self.sp,
         };
         Ok(val)
     }
@@ -97,6 +101,7 @@ pub enum RegisterName {
     dvc,
     out,
     pc,
+    sp,
 }
 
 const GP0_ID: u8 = RegisterName::gp0 as u8;
@@ -110,19 +115,20 @@ const GP7_ID: u8 = RegisterName::gp7 as u8;
 const ANS_ID: u8 = RegisterName::ans as u8;
 const DVC_ID: u8 = RegisterName::dvc as u8;
 const OUT_ID: u8 = RegisterName::out as u8;
-const PC_ID: u8 = RegisterName::pc as u8;
+const PC_ID:  u8 = RegisterName::pc  as u8;
+const SP_ID:  u8 = RegisterName::sp  as u8;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParseError {
     NoSuchRegisterName(String)
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum DecodeError {
     NoSuchRegisterID(u8)
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum AccessError {
     PseudoRegister(RegisterName),
 }
@@ -143,6 +149,7 @@ impl RegisterName {
             "dvc" => Ok(RegisterName::dvc),
             "out" => Ok(RegisterName::out),
             "pc"  => Ok(RegisterName::pc),
+            "sp"  => Ok(RegisterName::sp),
             _ => Err(ParseError::NoSuchRegisterName(s.to_string()))
         }
     }
@@ -161,7 +168,8 @@ impl RegisterName {
             ANS_ID => Ok(RegisterName::ans),
             DVC_ID => Ok(RegisterName::dvc),
             OUT_ID => Ok(RegisterName::out),
-            PC_ID => Ok(RegisterName::pc),
+            PC_ID  => Ok(RegisterName::pc),
+            SP_ID  => Ok(RegisterName::sp),
             _ => Err(DecodeError::NoSuchRegisterID(x))
         }
     }
@@ -185,7 +193,8 @@ mod tests {
             ("ans", RegisterName::ans),
             ("dvc", RegisterName::dvc),
             ("out", RegisterName::out),
-            ("pc", RegisterName::pc),
+            ("pc",  RegisterName::pc),
+            ("sp",  RegisterName::sp),
         ];
         for (text, expected) in pairs {
             let actual: RegisterName =
@@ -215,7 +224,8 @@ mod tests {
             (ANS_ID, RegisterName::ans),
             (DVC_ID, RegisterName::dvc),
             (OUT_ID, RegisterName::out),
-            (PC_ID, RegisterName::pc),
+            (PC_ID,  RegisterName::pc),
+            (SP_ID,  RegisterName::sp),
         ];
         for (byte, expected) in pairs {
             let actual: RegisterName =
@@ -238,7 +248,8 @@ mod tests {
             (ANS_ID, RegisterName::ans),
             (DVC_ID, RegisterName::dvc),
             (OUT_ID, RegisterName::out),
-            (PC_ID, RegisterName::pc),
+            (PC_ID,  RegisterName::pc),
+            (SP_ID,  RegisterName::sp),
         ];
         for (expected, register) in pairs {
             let actual: u8 = register as u8;
