@@ -5,6 +5,7 @@ use crate::programs::Program;
 use crate::programs;
 use crate::instructions;
 use crate::registers;
+use crate::devices::Device;
 
 #[derive(Debug)]
 pub enum ExecutionError {
@@ -140,8 +141,7 @@ impl Core {
     fn copy(&mut self,
         src: RegisterName,
         dst: RegisterName,
-        lcd0: &mut u16,
-        lcd1: &mut u16,
+        devices: &mut [&mut dyn Device],
     )
         -> Result<(), ExecutionError>
     {
@@ -163,8 +163,8 @@ impl Core {
             ), 
             RegisterName::out => {
                 match self.register_file.dvc {
-                    0 => { *lcd0 = val; },
-                    1 => { *lcd1 = val; },
+                    0 => { devices[0].write(val).unwrap(); },
+                    1 => { devices[1].write(val).unwrap(); },
                     _ => { self.write_tty(val); },
                 }
                 Ok(())
@@ -285,8 +285,7 @@ impl Core {
 
     pub fn execute_single_instruction(
         &mut self,
-        lcd0: &mut u16,
-        lcd1: &mut u16,
+        devices: &mut [&mut dyn Device],
     ) -> Result<bool, ExecutionError> {
         let mut instr: [u8; 4] = [0; 4];
         let pc = self.register_file.read(RegisterName::pc)?;
@@ -299,7 +298,7 @@ impl Core {
         match instr {
             Instruction::halt => { return Ok(true) },
             Instruction::add(x, y) => self.add(x, y)?,
-            Instruction::copy(src, dst) => self.copy(src, dst, lcd0, lcd1)?,
+            Instruction::copy(src, dst) => self.copy(src, dst, devices)?,
             Instruction::jump(dst, cond) => self.jump(dst, cond)?,
             Instruction::mul(x, y) => self.mul(x, y)?,
             Instruction::noop => (),
@@ -318,6 +317,7 @@ impl Core {
 mod tests {
     use super::*;
     use crate::instructions::InstructionName;
+    use crate::devices::Buffer;
 
     #[test]
     fn test_tty() {
@@ -368,8 +368,8 @@ mod tests {
         let program = Program::try_compile(&source).unwrap();
         core.load_program(&program).unwrap();
 
-        let mut _lcd0 = 0;
-        let mut _lcd1 = 0;
+        let mut _lcd0 = Buffer(vec![]);
+        let mut _lcd1 = Buffer(vec![]);
         core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
         core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();
         core.execute_single_instruction(&mut _lcd0, &mut _lcd1).unwrap();

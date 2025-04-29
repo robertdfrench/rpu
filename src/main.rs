@@ -3,6 +3,7 @@ use ratatui::widgets::Borders;
 use rpu::core::       Core; 
 use ratatui::layout:: Constraint; 
 use ratatui::         DefaultTerminal; 
+use rpu::devices::    Device;
 use ratatui::layout:: Direction; 
 use crossterm::event::Event; 
 use crossterm::event::KeyCode; 
@@ -21,6 +22,7 @@ use ratatui::style::  Style;
 use ratatui::style::  Stylize; 
 use ratatui::widgets::Table; 
 use ratatui::widgets::TableState; 
+use rpu::             devices;
 use crossterm::       event; 
 use std::             fs; 
 
@@ -91,10 +93,13 @@ fn run(
                             .select_previous();
                     },
                     KeyCode::Char('n') => {
+                        let mut devices: Vec<&mut dyn Device> = vec![
+                            &mut computer.lcd0,
+                            &mut computer.lcd1,
+                        ];
                         let r = computer.core
                             .execute_single_instruction(
-                                &mut computer.lcd0,
-                                &mut computer.lcd1,
+                                &mut devices
                             );
                         match r {
                             Ok(false) => { continue; },
@@ -117,8 +122,8 @@ fn run(
 struct Computer {
     core: Core,
     program: Program,
-    lcd0: u16,
-    lcd1: u16,
+    lcd0: LCD,
+    lcd1: LCD,
     code_list_state: ListState,
     memory_table_state: TableState,
 }
@@ -128,8 +133,8 @@ impl Computer {
         Self {
             core,
             program,
-            lcd0: 0,
-            lcd1: 0,
+            lcd0: LCD::default(),
+            lcd1: LCD::default(),
             code_list_state: ListState::default(),
             memory_table_state: TableState::new()
                 .with_selected(Some(0)),
@@ -207,14 +212,12 @@ fn render(computer: &mut Computer, frame: &mut Frame) {
         frame,
         "Code"
     );
-    render_lcd(
-        computer.lcd0,
-        layouts.lcd0, 
-        frame, 
+    computer.lcd0.render(
+        layouts.lcd0,
+        frame,
         "LCD0 (dvc 0)"
     );
-    render_lcd(
-        computer.lcd1,
+    computer.lcd1.render(
         layouts.lcd1,
         frame,
         "LCD1 (dvc 1)"
@@ -285,51 +288,75 @@ fn render_code(
     frame.render_stateful_widget(list, area, state);
 }
 
-
-fn render_lcd(
-    value: u16,
-    area: Rect,
-    frame: &mut Frame,
-    title: &str
-) {
-    let font_definition = include_str!("../lcd_font.txt");
-    let mut lcd_font: Vec<Vec<&str>> = vec![];
-    let mut current_lcd_char: Vec<&str> = vec![];
-    for (n, text) in font_definition.lines().enumerate() {
-        current_lcd_char.push(text);
-        if ((n + 1) % 5) == 0 {
-            lcd_font.push(current_lcd_char);
-            current_lcd_char = vec![];
-        }
-    }
-
-    let value = format!("{:0>5}", value);
-    let mut content = String::new();
-    for row in 0..5 {
-        for c in value.chars() {
-            let char_id = match c {
-                '0' => 0,
-                '1' => 1,
-                '2' => 2,
-                '3' => 3,
-                '4' => 4,
-                '5' => 5,
-                '6' => 6,
-                '7' => 7,
-                '8' => 8,
-                '9' => 9,
-                _ => panic!()
-            };
-
-            content.push_str(lcd_font[char_id][row]);
-        }
-        content.push_str("\n");
-    }
-
-    let paragraph = Paragraph::new(content).bold()
-        .block(common_block(title));
-    frame.render_widget(paragraph, area);
+#[derive(Default)]
+struct LCD {
+    value: u16
 }
+
+impl devices::Device for LCD {
+    fn write(&mut self, value: u16)
+        -> Result<(), devices::Error>
+    {
+        self.value = value;
+        Ok(())
+    }
+
+    fn read(&mut self)
+        -> Result<Option<u16>, devices::Error>
+    {
+        Err(devices::Error::Read(
+            String::from("The LCD isn't an input")
+        ))
+    }
+}
+
+impl LCD {
+    fn render(
+        &self,
+        area: Rect,
+        frame: &mut Frame,
+        title: &str
+    ) {
+        let font_definition = include_str!("../lcd_font.txt");
+        let mut lcd_font: Vec<Vec<&str>> = vec![];
+        let mut current_lcd_char: Vec<&str> = vec![];
+        for (n, text) in font_definition.lines().enumerate() {
+            current_lcd_char.push(text);
+            if ((n + 1) % 5) == 0 {
+                lcd_font.push(current_lcd_char);
+                current_lcd_char = vec![];
+            }
+        }
+
+        let value = format!("{:0>5}", self.value);
+        let mut content = String::new();
+        for row in 0..5 {
+            for c in value.chars() {
+                let char_id = match c {
+                    '0' => 0,
+                    '1' => 1,
+                    '2' => 2,
+                    '3' => 3,
+                    '4' => 4,
+                    '5' => 5,
+                    '6' => 6,
+                    '7' => 7,
+                    '8' => 8,
+                    '9' => 9,
+                    _ => panic!()
+                };
+
+                content.push_str(lcd_font[char_id][row]);
+            }
+            content.push_str("\n");
+        }
+
+        let paragraph = Paragraph::new(content)
+            .block(common_block(title));
+        frame.render_widget(paragraph, area);
+    }
+}
+
 
 fn render_printer(
     text: &str,
