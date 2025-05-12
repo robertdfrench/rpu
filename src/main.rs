@@ -226,7 +226,7 @@ fn render(computer: &mut Computer, frame: &mut Frame) {
         &computer.core.tty,
         layouts.printer,
         frame,
-        "Printer (dvc 2)"
+        "Error Console"
     );
 
     let gp_registers = vec![

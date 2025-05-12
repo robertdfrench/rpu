@@ -1,3 +1,6 @@
+*(Note that this repo was designed for interactive, 1:1 teaching
+-- for a specific student -- and may not stand well on its own)*
+
 # Your Buddy Robert's Processing Unit
 Are you having trouble with:
 
