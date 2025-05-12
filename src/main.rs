@@ -9,6 +9,7 @@ use crossterm::event::Event;
 use crossterm::event::KeyCode; 
 use ratatui::         Frame; 
 use ratatui::layout:: Layout; 
+use ratatui::text::   Line;
 use ratatui::widgets::List;
 use ratatui::widgets::ListState;
 use ratatui::widgets::Paragraph; 
@@ -18,6 +19,7 @@ use rpu::programs::   Program;
 use ratatui::layout:: Rect; 
 use color_eyre::      Result; 
 use ratatui::widgets::Row; 
+use ratatui::text::   Span;
 use ratatui::style::  Style; 
 use ratatui::style::  Stylize; 
 use ratatui::widgets::Table; 
@@ -144,12 +146,14 @@ impl Computer {
 
 struct Layouts {
     code: Rect,
+    help: Rect,
     lcd0: Rect,
     lcd1: Rect,
     memory: Rect,
+    printer: Rect,
+    power_led: Rect,
     registers: Rect,
     special_registers: Rect,
-    printer: Rect,
 }
 
 impl Layouts {
@@ -162,19 +166,30 @@ impl Layouts {
                 Constraint::Min(55),
             ])
             .split(frame.area());
-        let code = layout[0];
+
+        let lefthand_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![
+                Constraint::Fill(1),
+                Constraint::Length(4)
+            ])
+            .split(layout[0]);
+        let code = lefthand_layout[0];
+        let help = lefthand_layout[1];
 
         let devices_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![
                 Constraint::Length(7),
                 Constraint::Length(7),
+                Constraint::Length(3),
                 Constraint::Fill(1),
             ])
             .split(layout[1]);
         let lcd0 = devices_layout[0];
         let lcd1 = devices_layout[1];
-        let printer = devices_layout[2];
+        let power_led = devices_layout[2];
+        let printer = devices_layout[3];
 
         let tools_layout = Layout::default()
             .direction(Direction::Vertical)
@@ -190,12 +205,14 @@ impl Layouts {
 
         Self {
             code,
+            help,
             lcd0,
             lcd1,
             memory,
             registers, 
             special_registers,
             printer,
+            power_led,
         }
     }
 }
@@ -212,6 +229,7 @@ fn render(computer: &mut Computer, frame: &mut Frame) {
         frame,
         "Code"
     );
+    render_help(layouts.help, frame, "Help");
     computer.lcd0.render(
         layouts.lcd0,
         frame,
@@ -221,6 +239,12 @@ fn render(computer: &mut Computer, frame: &mut Frame) {
         layouts.lcd1,
         frame,
         "LCD1 (dvc 1)"
+    );
+    render_led(
+        computer.core.power,
+        layouts.power_led,
+        frame,
+        "Power"
     );
     render_printer(
         &computer.core.tty,
@@ -287,6 +311,76 @@ fn render_code(
         .highlight_style(Style::new().italic().red());
 
     frame.render_stateful_widget(list, area, state);
+}
+
+fn render_help(
+    area: Rect,
+    frame: &mut Frame,
+    title: &str
+) {
+    let text_n = vec![
+        Line::from(vec![
+            Span::styled("n", Style::new().bold()),
+            Span::raw(" - execute next instruction")
+        ])
+    ];
+    let text_q = vec![
+        Line::from(vec![
+            Span::styled("q", Style::new().bold()),
+            Span::raw(" - exit this program")
+        ]),
+    ];
+    let text_up = vec![
+        Line::from(vec![
+            Span::styled("Up/Down", Style::new().bold()),
+            Span::raw(" - scroll code window")
+        ])
+    ];
+    let text_pgup = vec![
+        Line::from(vec![
+            Span::styled("PgUp/PgDown", Style::new().bold()),
+            Span::raw(" - scroll mem window")
+        ])
+    ];
+    let rows = [
+        Row::new([text_n, text_q]),
+        Row::new([text_up, text_pgup])
+    ];
+    let widths = vec![
+        Constraint::Length(28), Constraint::Length(31)
+    ];
+    let table = Table::new(rows, widths)
+        .column_spacing(4)
+        .block(common_block(title));
+    frame.render_widget(table, area);
+}
+
+fn render_led(
+    power: bool,
+    area: Rect,
+    frame: &mut Frame,
+    title: &str,
+) {
+    let content = match power {
+        true =>  " ON  ",
+        false => " OFF "
+    };
+    let style = match power {
+        true => Style::new().black().on_green(),
+        false => Style::new().white().on_red(),
+    };
+    let text = vec![
+        Line::from(vec![
+            Span::styled(
+                String::from(content),
+                style
+            )
+        ])
+    ];
+    let paragraph = Paragraph::new(text)
+        .block(common_block(title))
+        .centered();
+    frame.render_widget(paragraph, area);
 }
 
 #[derive(Default)]

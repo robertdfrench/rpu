@@ -1,6 +1,6 @@
-# This program does nothing except increment the program
-# counter (the special purpose 'pc' register). At the end, it
-# displays the value of this register.
+; This program does nothing except increment the program
+; counter (the special purpose 'pc' register). At the end, it
+; displays the value of this register.
 
 ; The 'noop' instruction does nothing
 noop

@@ -46,7 +46,8 @@ pub struct Core {
     pub register_file: RegisterFile,
     // Register File
     pub memory: [u8; 65_536],
-    pub tty: String
+    pub tty: String,
+    pub power: bool
 }
 
 #[derive(Debug)]
@@ -68,8 +69,9 @@ impl Core {
         let register_file = RegisterFile::new();
         let memory = [0; 65_536];
         let tty = String::new();
+        let power = true;
 
-        Self { register_file, memory, tty }
+        Self { register_file, memory, tty, power }
     }
 
     fn write_tty(&mut self, byte: u16) {
@@ -329,10 +331,19 @@ impl Core {
         self.put(val, dst)
     }
 
+    pub fn halt(&mut self) -> Result<(), ExecutionError> {
+        self.power = false;
+        Ok(())
+    }
+
     pub fn execute_single_instruction(
         &mut self,
         devices: &mut [&mut dyn Device],
     ) -> Result<bool, ExecutionError> {
+        if ! self.power {
+            return Ok(false);
+        }
+
         let mut instr: [u8; 4] = [0; 4];
         let pc = self.register_file.read(RegisterName::pc)?;
         instr[0] = self.memory[(pc as usize) + 0];
@@ -342,7 +353,7 @@ impl Core {
         let instr = u32::from_ne_bytes(instr);
         let instr = Instruction::try_from_u32(instr)?;
         match instr {
-            Instruction::halt => { return Ok(true) },
+            Instruction::halt => self.halt()?,
             Instruction::add(x, y) => self.add(x, y)?,
             Instruction::copy(src, dst) => self.copy(src, dst, devices)?,
             Instruction::jump(dst, cond) => self.jump(dst, cond)?,

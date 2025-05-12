@@ -1,9 +1,14 @@
-# Start
+; This program defines a function called DOUBLE, which is called
+; with an argument X and returns 2*X. The DOUBLE function is
+; called on each of 10, 9, 8, ... and the results are stored
+; in the HEAP (defined at the end of the program).
+
+; Start
     put 11 gp0
     put .HEAP gp7
 
 
-# LOAD 
+; LOAD 
     put   1   gp1 .LOAD
     sub   gp0 gp1
     push  ans ; to retain the counter
@@ -14,7 +19,7 @@
     jump  gp2 zero
 
 
-# LOAD__DOUBLE_RETURN
+; LOAD__DOUBLE_RETURN
     pop   gp3 .LOAD__DOUBLE_RETURN
     pop   gp0 ; Recover the counter
     write gp3 gp7
@@ -28,7 +33,7 @@
     jump gp2 zero
 
 
-# DOUBLE
+; DOUBLE
     pop  gp2 .DOUBLE
     pop  gp0 ; Argument
     put  2 gp1
@@ -37,9 +42,9 @@
     jump gp2 zero ; Return to caller
 
 
-# END
+; END
     halt .END
 
 
-# Define HEAP Address
+; Define HEAP Address
     noop .HEAP

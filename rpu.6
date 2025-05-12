@@ -358,6 +358,71 @@ against a loop value.
 .
 .
 .
+.Sh LABELS
+.
+.
+If you want to
+.Ic jump ,
+you gotta know where to land.
+.Nm
+allows you to annotate your code with
+.Dq labels
+so that you can easily tell the computer where to go. Consider
+this program:
+.
+.Bd -literal -offset -indent
+
+put  5   gp0
+put  7   gp1
+put  28  gp2
+jump gp2 zero
+noop
+noop
+noop
+add  gp0 gp1
+copy ans out
+halt
+.Ed
+.
+.Pp
+On line 4, it jumps over the 
+.Ic noop
+instructions and lands at line 8. But how can you tell? Well,
+each line of code takes up 4 bytes in the computer's memory, and
+since we start counting from zero, line 8 is at address
+.Ms "(8 - 1) * 4 == 28" .
+.
+.Pp
+That makes the code difficult to read and maintain, since you
+have to figure out which address correspond to which line of
+code (something that will change as you make changes to your
+program!).
+.
+.Pp
+Labels allow you to give a meaningful name to important spots in
+the code.
+When
+.Nm
+reads your program, it will infer the location of these spots
+for you, making the code easier to understand. Here is the same
+program from above rewritten to use a label:
+.
+.Bd -literal -offset -indent
+
+put  5   gp0
+put  7   gp1
+put  .ADD_STUFF  gp2
+jump gp2 zero
+noop
+noop
+noop
+add  gp0 gp1 .ADD_STUFF
+copy ans out
+halt
+.Ed
+.
+.
+.
 .Sh EXAMPLES
 This machine is kinda weird, so a few example programs might
 help you get started.
@@ -420,4 +485,23 @@ jump gp6
 .It Lk https://github.com/robertdfrench/rpu "Source Code"
 .It Lk https://store.steampowered.com/app/1444480/Turing_Complete/ "Turing Complete"
 .It Lk https://nostarch.com/foundationsofcomp "The Secret Life of Programs"
+.El
+.
+.
+.
+.Sh BUGS
+.Nm
+cannot resume after cpu errors.
+You just gotta quit and restart.
+Don't write bugs.
+.
+.Pp
+Scrolling through memory happens one line at a time.
+It can take several minutes to reach the top addresses, where the stack is.
+.
+.Pp
+If you write a comment on a line that defines a label,
+.Nm
+will silently discard your label and then complain when other
+code uses it.
 .El
