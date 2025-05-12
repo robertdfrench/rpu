@@ -37,8 +37,8 @@ crazy:
 1. Run `sudo make install` to install `rpu` and its man page.
 2. Run `man rpu` to read the man page
 
-*When you start `rpu`, you will need to press 'n' to get it to execute
-the next instruction.  You can quit by pressing 'Esc'*
+*(Alternatively, `cargo run -- examples/blah` and `man ./rpu.6`
+will work just fine)*
 
 3. Run `rpu examples/print_5.s` to see how to write the number "5" to
    LCD0.
