@@ -16,6 +16,7 @@ use ratatui::widgets::Paragraph;
 use clap::            Parser;
 use std::path::       PathBuf;
 use rpu::programs::   Program; 
+use rpu::core::       RAM;
 use ratatui::layout:: Rect; 
 use color_eyre::      Result; 
 use ratatui::widgets::Row; 
@@ -491,7 +492,7 @@ fn render_registers(
 }
 
 fn render_memory(
-    memory: &[u8; 65_536],
+    memory: &[u8; RAM],
     state: &mut TableState,
     area: Rect,
     frame: &mut Frame,
@@ -549,6 +550,7 @@ fn render_memory(
 }
 
 fn common_block(title: &str) -> Block {
+    let title = format!("[{title}]");
     Block::new()
         .title(title)
         .borders(Borders::ALL)

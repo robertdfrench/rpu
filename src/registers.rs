@@ -1,3 +1,5 @@
+use crate::core::RAM;
+
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct RegisterFile {
@@ -31,7 +33,7 @@ impl RegisterFile {
             ans:  0,
             dvc:  0,
             pc:   0,
-            sp:   65_534,
+            sp:   (RAM - 2) as u16,
         }
     }
 
