@@ -6,11 +6,56 @@ on:
       - "*"
 
 jobs:
-  release:
+  linux-intel:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
-    - run: make release VERSION=${{ github.ref_name }}
+    - run: make release VERSION=${{ github.ref_name }}-linux-intel
     - uses: softprops/action-gh-release@v2
       with:
-        files: build/rpu-${{ github.ref_name }}.tgz
+        files: build/rpu-${{ github.ref_name }}-linux-intel.tgz
+
+  linux-arm:
+    runs-on: ubuntu-22.04-arm
+    steps:
+    - uses: actions/checkout@v4
+    - run: make release VERSION=${{ github.ref_name }}-linux-arm
+    - uses: softprops/action-gh-release@v2
+      with:
+        files: build/rpu-${{ github.ref_name }}-linux-arm.tgz
+
+  macOS-intel:
+    runs-on: macos-13
+    steps:
+    - uses: actions/checkout@v4
+    - run: make release VERSION=${{ github.ref_name }}-macOS-intel
+    - uses: softprops/action-gh-release@v2
+      with:
+        files: build/rpu-${{ github.ref_name }}-macOS-intel.tgz
+
+  macOS-arm:
+    runs-on: macos-14
+    steps:
+    - uses: actions/checkout@v4
+    - run: make release VERSION=${{ github.ref_name }}-macOS-arm
+    - uses: softprops/action-gh-release@v2
+      with:
+        files: build/rpu-${{ github.ref_name }}-macOS-arm.tgz
+
+  windows-intel:
+    runs-on: windows-2019
+    steps:
+    - uses: actions/checkout@v4
+    - run: make release VERSION=${{ github.ref_name }}-windows-intel
+    - uses: softprops/action-gh-release@v2
+      with:
+        files: build/rpu-${{ github.ref_name }}-windows-intel.tgz
+
+  windows-arm:
+    runs-on: windows-11-arm
+    steps:
+    - uses: actions/checkout@v4
+    - run: make release VERSION=${{ github.ref_name }}-windows-arm
+    - uses: softprops/action-gh-release@v2
+      with:
+        files: build/rpu-${{ github.ref_name }}-windows-arm.tgz
