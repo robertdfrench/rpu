@@ -1,20 +1,13 @@
-name: Makefile
+name: Test
 
 on:
   push:
-    branches: [ "trunk" ]
-  pull_request:
-    branches: [ "trunk" ]
+    branches:
+      - "*"
 
 jobs:
-  release:
-
+  test:
     runs-on: ubuntu-22.04
-
     steps:
-    - uses: actions/checkout@v4
-    - run: make release
-    - uses: actions/upload-artifact@v4
-      with:
-        name: rpu
-        path: build/rpu-${{ github.sha }}.tgz
+      - uses: actions/checkout@v4
+      - run: make test

@@ -21,27 +21,23 @@ $(BINPATH)/rpu: rpu
 	install -o root -g root -m 0755 rpu $@
 
 
-check: test #: Run all tests
-
-test: #: Just run cargo-based tests
+test: #: Any tests runnable by cargo
 	cargo test
 
-release: check build
-	make _tarball RPU_VERSION=`git rev-parse HEAD`
-
-build: #: Build an optimized binary
+release: test #: Build a release tarball for installation
+ifndef VERSION
+	$(error "Bud, c'mon pal you gotta define VERSION first")
+endif
 	cargo build --release
-
-_tarball:
 	mkdir -p build
-	mkdir -p build/rpu-$(RPU_VERSION)
-	mkdir -p build/rpu-$(RPU_VERSION)/examples
-	cp Makefile build/rpu-$(RPU_VERSION)
-	cp README.md build/rpu-$(RPU_VERSION)
-	cp rpu.6 build/rpu-$(RPU_VERSION)
-	cp examples/* build/rpu-$(RPU_VERSION)/examples
-	cp target/release/rpu build/rpu-$(RPU_VERSION)
-	tar -czf build/rpu-$(RPU_VERSION).tgz -C build rpu-$(RPU_VERSION)
+	mkdir -p build/rpu-$(VERSION)
+	mkdir -p build/rpu-$(VERSION)/examples
+	cp Makefile build/rpu-$(VERSION)
+	cp README.md build/rpu-$(VERSION)
+	cp rpu.6 build/rpu-$(VERSION)
+	cp examples/* build/rpu-$(VERSION)/examples
+	cp target/release/rpu build/rpu-$(VERSION)
+	tar -czf build/rpu-$(VERSION).tgz -C build rpu-$(VERSION)
 
 clean: # Clean up build and release artifacts
 	rm -rf build target
