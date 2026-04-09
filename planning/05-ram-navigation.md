@@ -1,254 +1,314 @@
-# Stage 5 — RAM navigation features
+# Stage 5 — RAM change visualization (and a little navigation)
 
-## Why this is here
+## Why this stage exists at all
 
-This is the stage that actually solves the original "I can't navigate
-the RAM" complaint. By now we have:
+The original framing of this stage was "RAM navigation" — cursor,
+arrow keys, jump-to-address, follow-PC, etc. That was the right
+answer when RAM was 64 KiB and the problem was *"students can't
+find their way around 8,192 rows"*.
 
-- A perf-fixed memory pane that builds only the visible window
-  (stage 1).
-- 1 KiB of RAM — small enough that scrolling is a non-issue and
-  students can see the whole memory in a few page-downs (stage 1).
-- A headless `Computer` (stage 2) that gives `program: Option<Program>`
-  a natural home.
-- A render function callable from tests (stage 3), so we can pin
-  visual behavior down with `TestBackend`.
+After the stage 1 pivot to **1 KiB**, navigation isn't really a
+problem anymore. The whole memory pane is ~128 rows; a few
+PgDn/PgUp presses cover the entire address space. What students
+*still* can't see is **what's changing** as the program runs. Step
+by step, the LCD updates and the registers update, but the bytes
+in RAM are an undifferentiated grid of small numbers — nothing
+visually says "this byte just got written" or "this region holds
+the program" or "this is the stack."
 
-Everything in this stage is additive on the `Paragraph`-based memory
-renderer from stage 1. None of it requires further refactoring of
-`core.rs`.
+This stage replaces the original navigation focus with a
+**change-visualization** focus. The killer feature is per-step
+highlighting of bytes that just changed. Everything else is
+supporting cast.
+
+## Prerequisites
+
+By now we have:
+
+- A constant-cost `render_memory` (stage 1).
+- 1 KiB of RAM (stage 1).
+- A headless `Computer` that owns the program (stage 2).
+- `Program.labels` exposed for the optional jump-to-label feature
+  (stage 2).
+- A render function callable from `TestBackend` tests, with
+  `UiState` as a separate struct from `Computer` (stage 3).
+
+Nothing in this stage requires touching `core.rs`.
 
 ## Sub-stages
 
-The features below are roughly ordered by bang-for-buck. Each
-sub-stage is independently shippable; pick a stopping point that
-matches what you actually need.
+Roughly ordered by pedagogical value. Earlier sub-stages are the
+ones that actually answer the user complaint; later sub-stages are
+nice-to-have polish that may or may not be worth doing depending
+on how things feel after 5a-5c land.
 
-### 4a — Region coloring
+### 5a — Per-step change highlighting (the killer feature)
 
-Tint memory bytes by what they are, no new state required:
+After every `Computer::step()`, snapshot RAM. On the next render,
+any byte that differs from the snapshot gets a flash style (e.g.
+white-on-blue, bright background). The flash lasts for one render,
+then the snapshot updates.
 
-| Region   | Source                              | Color suggestion       |
-| -------- | ----------------------------------- | ---------------------- |
-| Program  | `0..program.size()`                 | dim green              |
-| Current  | `pc..pc+4`                          | bold yellow background |
-| Stack    | `(sp + 2)..=(RAM - 2)`              | dim cyan               |
-| Unused   | (everything else)                   | default / dim          |
+Students press `n` and *immediately see the byte that just got
+written*. That's the entire pedagogical goal of this stage in one
+feature.
 
-For this to work, `Computer` needs to remember the loaded program's
-size after `load_program`. Add `program: Option<Program>` (per stage
-2's note) and use `program.as_ref().map(|p| p.size())`.
-
-In `render_memory`, classify each byte before formatting and apply
-a `Style` to its `Span`:
+State to add (on `Computer`, not `UiState` — the snapshot is part
+of CPU history, not view state):
 
 ```rust
-fn classify(addr: usize, computer: &Computer) -> Region {
-    let pc = computer.core.register_file.pc as usize;
-    if (pc..pc+4).contains(&addr) {
-        Region::Current
-    } else if let Some(p) = &computer.program {
-        if addr < p.size() { return Region::Program; }
-        // ... etc
-    }
-    // ...
+pub struct Computer {
+    pub core: Core,
+    pub devices: Devices,
+    pub program: Option<Program>,
+    /// Snapshot of `core.memory` taken at the *start* of the most
+    /// recent `step()`. Compared against the live memory at render
+    /// time to highlight bytes that just changed.
+    last_step_memory: [u8; RAM],
 }
+```
 
-fn style_for(region: Region) -> Style {
-    match region {
-        Region::Current => Style::new().yellow().bold().on_black(),
-        Region::Program => Style::new().green().dim(),
-        Region::Stack   => Style::new().cyan().dim(),
-        Region::Unused  => Style::new().dim(),
+Update inside `step()`:
+
+```rust
+pub fn step(&mut self) -> Result<(), ExecutionError> {
+    self.last_step_memory = self.core.memory;
+    let mut slice = self.devices.as_slice();
+    self.core.execute_single_instruction(&mut slice)?;
+    Ok(())
+}
+```
+
+A small accessor for the renderer:
+
+```rust
+impl Computer {
+    /// Returns true if the byte at `addr` differs from its value
+    /// at the start of the most recent step.
+    pub fn byte_changed(&self, addr: u16) -> bool {
+        self.core.memory[addr as usize]
+            != self.last_step_memory[addr as usize]
     }
 }
 ```
 
-That's the whole feature. It's the highest-leverage thing in the
-stage and it costs you maybe 30 lines.
+In `render_memory`, before formatting each byte:
 
-**Test (using stage 3 scaffolding):**
+```rust
+let changed = computer.byte_changed(addr as u16);
+let span_style = if changed {
+    Style::new().white().on_blue().bold()
+} else {
+    base_style_for(addr, computer)   // see 5b
+};
+```
+
+That's the whole feature. Maybe 40 lines including the snapshot
+field, the accessor, and the render-side branch.
+
+**Tests** (`tests/render.rs`):
 
 ```rust
 #[test]
-fn current_instruction_is_highlighted() {
+fn changed_bytes_are_highlighted_after_step() {
     let mut computer = Computer::new();
-    computer.load_source("put 7 gp0\nhalt\n").unwrap();
-    // PC is at 0; bytes 0..4 should be the "current" region.
+    computer.load_source(
+        "put 42 gp0\n\
+         put 100 gp1\n\
+         write gp0 gp1\n\
+         halt\n",
+    ).unwrap();
+    computer.step().unwrap();   // put 42 gp0   — no memory change
+    computer.step().unwrap();   // put 100 gp1  — no memory change
+    computer.step().unwrap();   // write gp0 gp1 — memory[100..102] changes
 
     let backend = TestBackend::new(120, 30);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut ui = UiState::default();
+    ui.memory_selected_row = 100 / 8;
     terminal.draw(|f| render(f, &computer, &mut ui)).unwrap();
 
-    let buffer = terminal.backend().buffer();
-    // Find a cell that contains the byte at address 0 and check it
-    // has the "current" highlight style. (Helper: find_cell_at_addr.)
-    let cell = find_byte_cell(buffer, 0);
-    assert_eq!(cell.style().fg, Some(Color::Yellow));
+    // Find the cell rendering byte 100; assert its bg is blue.
+    let cell = find_byte_cell(terminal.backend().buffer(), 100);
+    assert_eq!(cell.style().bg, Some(Color::Blue));
+}
+
+#[test]
+fn unchanged_bytes_are_not_highlighted_after_step() {
+    // ... same setup, then assert byte 50 (untouched) has the
+    //     default background.
 }
 ```
 
-### 4b — Cursor + arrow-key navigation
+### 5b — Region coloring
 
-Add a separate cursor inside the memory pane, distinct from
-PgUp/PgDn scrolling:
+Tint memory bytes by what region they're in, so students can see
+the *shape* of the program even when nothing is changing. No new
+state — derived from `Computer` each frame.
+
+| Region   | Source                           | Style suggestion       |
+| -------- | -------------------------------- | ---------------------- |
+| Program  | `0..program.size()`              | dim green              |
+| Current  | `pc..pc+4`                       | bold yellow background |
+| Stack    | `(sp + 2)..=(RAM - 2)`           | dim cyan               |
+| Unused   | (everything else)                | default / dim          |
+
+Per-step change highlighting (5a) wins over region coloring when
+they overlap — a byte that just changed is shown as "changed", not
+"program byte".
+
+```rust
+fn region(addr: usize, computer: &Computer) -> Region {
+    let pc = computer.core.register_file.pc as usize;
+    if (pc..pc+4).contains(&addr) { return Region::Current; }
+    let sp = computer.core.register_file.sp as usize;
+    if addr >= sp + 2 && addr <= RAM - 2 { return Region::Stack; }
+    if let Some(p) = &computer.program {
+        if addr < p.size() { return Region::Program; }
+    }
+    Region::Unused
+}
+```
+
+This is the feature that makes "where is the stack?" visually
+obvious.
+
+### 5c — Dirty-bit heatmap (ever-touched memory)
+
+A `[bool; RAM]` of "has this byte ever been written since
+power-on". Touched bytes render in a brighter shade than untouched
+bytes. Lets students see the *cumulative footprint* of execution,
+which is interesting for programs that use scratch memory.
+
+Lives on `Computer`. Updated by an instrumented memory write helper
+that wraps the existing direct `memory[i] = ...` lines in `core.rs`
+(the `write` and `push` instructions, plus `load_program`).
+
+This is a lower-priority addition — it's a nice-to-have on top of
+the change highlight in 5a, not a substitute for it. Skip it
+entirely if the per-step highlight already feels sufficient.
+
+### 5d — Watch list / pinned addresses (optional)
+
+A small sidebar pane in the right column showing only addresses
+the user has pinned, regardless of where the memory pane is
+scrolled. Lets students keep an eye on specific scratch variables
+without losing the main view.
 
 ```rust
 pub struct UiState {
-    pub mem_scroll: MemoryScroll,
-    pub mem_cursor: u16,        // byte index, 0..RAM
-    pub mem_focus: bool,        // true when arrow keys move cursor
+    // ...
+    pub watched: Vec<u16>,
 }
 ```
 
-When `mem_focus` is on, arrow keys move the cursor and auto-scroll
-the pane to keep it visible. A key like `m` toggles focus into the
-memory pane; `Esc` exits. Without focus, arrow keys do whatever
-they currently do (navigate code, presumably).
+Key like `w` toggles "pin the byte at the cursor" (requires the
+optional 5e cursor below). Or the watch list could be hardcoded
+per-program via a future `# watch 100` directive in source — but
+that's source-format work, defer.
 
-The cursor is rendered as a fifth region in the classifier above
-(`Region::Cursor`), drawn on top so it wins ties with `Current`.
+Skip this entirely if no example program produces interesting
+scratch state worth pinning.
 
-### 4c — Decoded instruction sidebar
+### 5e — Cursor (only if needed by 5d, or for completeness)
 
-When the cursor is on a 4-aligned address, decode those 4 bytes and
-show what they'd execute as in a tiny pane. Reuses
-`Instruction::try_from_u32`.
+Add a `memory_cursor: u16` to `UiState` and arrow-key navigation
+inside the memory pane (toggled in/out of "memory focus" with a
+key like `m`, so arrows still scroll the code window normally).
+The cursor renders as a fifth region in the classifier from 5b
+and wins ties.
+
+Only worth doing if 5d (watch list) wants a way to pick addresses
+interactively. Otherwise skip — at 1 KiB the page-jump from stage
+1 is already enough.
+
+### 5f — Decoded instruction sidebar (optional polish)
+
+When some address is "in focus" (whether via cursor or just at the
+PC), decode those 4 bytes via `Instruction::try_from_u32` and show
+the disassembled form in a small pane. Pure read-only feature.
 
 ```rust
-fn render_decoded(frame: &mut Frame, computer: &Computer, ui: &UiState, area: Rect) {
-    let addr = ui.mem_cursor as usize;
-    let bytes = if addr + 4 <= computer.core.memory.len() {
-        let mut b = [0u8; 4];
-        b.copy_from_slice(&computer.core.memory[addr..addr+4]);
-        Some(u32::from_ne_bytes(b))
-    } else { None };
-
-    let text = match bytes.and_then(|w| Instruction::try_from_u32(w).ok()) {
-        Some(instr) => format!("{addr:>5}: {instr:?}"),
-        None        => format!("{addr:>5}: (not a valid instruction)"),
-    };
-    frame.render_widget(
-        Paragraph::new(text).block(common_block("Decoded")),
-        area,
-    );
-}
+let bytes = u32::from_ne_bytes([
+    computer.core.memory[addr],
+    computer.core.memory[addr+1],
+    computer.core.memory[addr+2],
+    computer.core.memory[addr+3],
+]);
+let text = match Instruction::try_from_u32(bytes) {
+    Ok(instr) => format!("{addr:>4}: {instr:?}"),
+    Err(_)    => format!("{addr:>4}: (not a valid instruction)"),
+};
 ```
 
-The pane lives where you have room — probably squeezing the help
-panel down by a line or two, or adding a row to the right column
-under the special registers. Layout decision; not blocking.
+Cute but the source pane already shows the source line for the
+current PC, which is more readable than `Instruction::Debug`. Only
+worth building if you want a way to disassemble *non-PC* addresses
+(e.g. inspecting program bytes at a different location).
 
-### 4d — Jump-to-address prompt
+## Things I'm explicitly NOT proposing
 
-Press `g`, get a small input modal at the bottom of the screen,
-type an address (decimal, `0xNN` hex, or `.LABEL`), enter to jump
-the cursor there.
+These were in the original stage 5 plan; they don't earn their
+keep at 1 KiB:
 
-```rust
-pub enum UiMode {
-    Normal,
-    GotoPrompt { input: String },
-}
-```
+- **Jump-to-address prompt** (the `g` modal). At 1 KiB you can
+  PgDn to anywhere in 5-6 keypresses. The modal would be more
+  ceremony than it saves.
+- **Auto-follow modes for PC and SP.** With change-highlighting
+  (5a) the right thing is already visually obvious — you don't
+  need the view to chase the cursor.
+- **Hex/dec toggle and ASCII gutter.** Would have been nice at
+  64 KiB. At 1 KiB the decimal display is already legible. Defer
+  forever, or add when a student actually asks for it.
 
-In `render`, if `ui.mode` is `GotoPrompt`, draw a one-line
-`Paragraph` over the bottom of the screen showing `:goto > {input}`.
-Key handling switches based on mode.
-
-Address parsing:
-
-```rust
-fn parse_address(s: &str, program: Option<&Program>) -> Option<u16> {
-    let s = s.trim();
-    if let Some(rest) = s.strip_prefix("0x") {
-        u16::from_str_radix(rest, 16).ok()
-    } else if let Some(label) = s.strip_prefix('.') {
-        program?.label_address(label)
-    } else {
-        s.parse::<u16>().ok()
-    }
-}
-```
-
-For label support, `Program` needs to retain its symbol table after
-compile — currently it might throw it away. Worth checking
-`programs.rs` and adding `pub labels: HashMap<String, u16>` if
-missing. The cost is negligible (a small map per program) and it
-unlocks both this feature and the decoded sidebar showing label
-names.
-
-### 4e — Auto-follow modes
-
-Toggle keys `F p` (follow PC) and `F s` (follow SP). When active,
-`mem_scroll.offset` is recomputed each frame to keep the followed
-register's address visible (and centered, ideally).
-
-```rust
-pub enum FollowMode { Off, Pc, Sp }
-
-// In render_memory, before clamping the offset:
-match ui.follow {
-    FollowMode::Pc => ui.mem_scroll.offset = center_on(computer.core.register_file.pc, visible_rows),
-    FollowMode::Sp => ui.mem_scroll.offset = center_on(computer.core.register_file.sp, visible_rows),
-    FollowMode::Off => {}
-}
-```
-
-This is the feature you'll use most while debugging your own programs.
-
-### 4f — Hex/dec toggle and ASCII gutter
-
-Press `x` to toggle hex/dec for the byte values; always show an
-ASCII gutter on the right side (`. ` for non-printable). Polish; do
-last.
-
-```
- ADDR    +0   +1   +2   +3   +4   +5   +6   +7   ASCII
-     0   0a   04   00   00   0a   05   00   01   ........
-     8   0a   06   00   02   01   00   00   00   ........
-```
+These are documented here so future-me doesn't get tempted to
+revive them without rethinking the underlying problem.
 
 ## Test plan
 
-For each sub-stage, add a render test against `TestBackend`:
+For each shipped sub-stage, at least one render test in
+`tests/render.rs`:
 
-- [ ] **4a:** styled cell at PC has yellow fg.
-- [ ] **4a:** styled cells in stack region have cyan fg.
-- [ ] **4b:** cursor cell is visually distinct; arrow key advances
-      `ui.mem_cursor` by 1.
-- [ ] **4b:** moving cursor past the visible window auto-scrolls.
-- [ ] **4c:** decoded sidebar shows the right `Instruction` for the
-      cursor's aligned address.
-- [ ] **4d:** parsing tests for `parse_address` (decimal, hex,
-      label, garbage).
-- [ ] **4d:** integration test: press `g`, type `0x10`, enter,
-      `ui.mem_cursor == 0x10`.
-- [ ] **4e:** with `FollowMode::Pc`, scrolling is forced to show PC.
-- [ ] **4f:** hex toggle changes "0a" ↔ "10" in rendered output.
+- [ ] **5a:** byte that just changed has the highlight style;
+      byte that didn't change has the base style. Tests both
+      branches with the same render call.
+- [ ] **5a:** highlight clears after a second `step()` if the
+      byte didn't change again.
+- [ ] **5b:** byte at PC has the "current" style; byte in the
+      stack region has the "stack" style; byte in unused memory
+      has the dim style.
+- [ ] **5c (if shipped):** dirty bit set after writing; cleared
+      after... actually, dirty bits are cumulative — they're never
+      cleared during a run. Test that an untouched byte renders
+      dim and a written byte renders bright.
+
+Plus a CPU-level test in `tests/cpu.rs`:
+
+- [ ] `Computer::byte_changed(addr)` reflects only the most recent
+      step, not the cumulative diff.
 
 ## Done when
 
-- [ ] You can load any example, scan through all 1 KiB, and never
-      lose track of where the program / stack / current instruction
-      are.
-- [ ] You can jump to any address by name or number.
-- [ ] When you don't want to think about it, follow-PC mode just
-      keeps the right thing on screen.
-- [ ] Each sub-stage has at least one render test pinning its
-      behavior down.
+- [ ] When a student presses `n`, they can immediately see which
+      bytes changed. This is the headline; if it's not true at the
+      end of this stage, the stage didn't ship.
+- [ ] The program region, stack region, and current PC are
+      visually distinct (5b).
+- [ ] Whatever sub-stages you skipped are explicitly documented as
+      skipped, not silently dropped.
 
 ## Notes for future me
 
-- The cursor and the scroll offset are *separate concerns*. Don't
-  conflate them: `mem_scroll` is "what's visible", `mem_cursor` is
-  "what's selected". Auto-scroll is a derived behavior that adjusts
-  scroll to keep cursor visible.
-- It's tempting to make every sub-stage configurable (color schemes,
-  bytes-per-row, etc). Resist. Hardcode reasonable defaults; add
-  config only when a real need shows up.
-- `Region` classification will be reused by the screen-device
-  framebuffer view in stage 7 if you generalize it. Don't generalize
-  preemptively, but if you find yourself writing the same `match` a
-  second time, that's the signal.
+- 5a is the *only* must-have. 5b is strongly recommended. 5c-5f
+  are optional and you should not feel bad about shipping the
+  stage without them.
+- Don't conflate the per-step diff (5a) with the cumulative dirty
+  bits (5c). They answer different questions: 5a is "what just
+  happened", 5c is "what has ever happened". Different colors,
+  different state.
+- The `last_step_memory: [u8; RAM]` snapshot is 1 KiB per
+  `Computer`. Negligible. Don't optimize it.
+- If you find yourself wanting the user to be able to see the
+  entire LCD history (not just `last_written()`) in the TUI,
+  *that's not what `Lcd::history` is for*. It's a test affordance.
+  If the TUI needs scrollback, design that separately.

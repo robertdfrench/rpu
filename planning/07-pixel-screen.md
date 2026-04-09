@@ -6,9 +6,12 @@ The goal: a box in the TUI where the running program can plot
 "pixels" (rendered as ASCII block characters), driven by writes to
 a new device. Visually it should look like a tiny low-res display.
 
-This stage depends on stages 4 (device table) and ideally 6 (so you
-can wire keyboard input into a "draw with arrows" demo). It does
-**not** depend on the RAM navigation stage.
+This stage depends on stage 4's indexed device dispatch (so writes
+to a non-existent device error cleanly) and ideally stage 6 (so
+you can wire keyboard input into a "draw with arrows" demo). The
+`Devices` struct itself already exists from stage 2 — this stage
+just adds a new field to it. It does **not** depend on the RAM
+navigation stage.
 
 ## Design decisions
 
@@ -182,7 +185,7 @@ impl Device for Screen {
 
 ### 2. Add to the device table
 
-`Devices` (from stage 4) gets:
+`Devices` (from stage 2) gets a new field:
 
 ```rust
 pub struct Devices {

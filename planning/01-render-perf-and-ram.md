@@ -113,8 +113,7 @@ size:
 - The `AddressOutOfBounds` variant is the natural place to extend
   for any future bounds-check failures (jump-to-out-of-bounds,
   etc.).
-- Stage 5 (RAM navigation) should make change-visualization the
-  centerpiece — see the brainstorm in the conversation log around
-  the 1 KiB pivot. The actually-useful features at 1 KiB are
-  per-step change highlighting, dirty-bit heatmaps, and a watch
-  list of pinned addresses, *not* fancier scrolling.
+- Stage 5 was rewritten in light of this pivot to make
+  change-visualization (per-step diff highlighting, region coloring,
+  optional dirty-bit heatmap) the centerpiece, *not* fancier
+  scrolling. Don't undo that rewrite.

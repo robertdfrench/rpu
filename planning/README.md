@@ -31,10 +31,11 @@ Tackle these in order unless noted.
 | 2   | [Headless `Computer` API](02-headless-computer.md)               | Top-level struct that owns Core + Devices + Program. Makes the CPU testable without any TUI at all. **The most leveraged stage.** |
 | 3   | [TUI render test scaffolding](03-tui-test-scaffolding.md)        | Extract `render()` so it's callable with `TestBackend`. Now narrow: only for things that are actually visual.                    |
 | 4   | [Device table refactor](04-device-table-refactor.md)             | Replace the hardcoded `match dvc { 0 => ..., 1 => ..., _ => tty }` with indexed dispatch. Unblocks new devices.                 |
-| 5   | [RAM navigation features](05-ram-navigation.md)                  | Region coloring, cursor, jump-to-address, auto-follow PC/SP, decoded-instruction sidebar.                                       |
+| 5   | [RAM change visualization](05-ram-navigation.md)                 | Per-step change highlighting (the killer feature), region coloring, optional dirty-bit heatmap. Solves "students can't see what's changing." |
 | 6   | [Input device + `rdy` flag](06-input-and-status-flag.md)         | Adds the `in` pseudo-register and a one-bit ready flag. First device that uses `Device::read()`.                                |
 | 7   | [Pixel screen device](07-pixel-screen.md)                        | New `Screen` device with stateful cursor protocol. Renders with half-block characters.                                          |
 | 8   | [Disk device (stretch)](08-disk.md)                              | Stream-style file device behind a CLI flag. Last because nothing depends on it.                                                 |
+| 9   | [Add `jumpnz` instruction (proposal)](09-jumpnz.md)              | "Jump when nonzero" — the missing complement to `jump`. Lets students phrase conditions in the positive. Low-cost ISA addition. |
 
 ## Open decisions
 

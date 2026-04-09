@@ -9,7 +9,10 @@ introduces the only piece of host-environment state in the whole
 project (a real file handle), so it's worth deferring until the
 rest is solid.
 
-Depends on stage 4 (device table). Otherwise standalone.
+Depends on stage 4's indexed device dispatch (so a write to an
+unattached disk surfaces as a clean execution error rather than a
+silent fallback). The `Devices` struct from stage 2 just gets a
+new field. Otherwise standalone.
 
 ## Design decisions
 
@@ -202,16 +205,21 @@ In `main`:
 
 ```rust
 let args = Args::parse();
-let disk = match args.disk {
-    Some(path) => Disk::attach(path),
-    None       => Disk::detached(),
-};
-let mut computer = Computer::new_with_disk(disk);
+let mut computer = Computer::new();
+if let Some(path) = args.disk {
+    computer.devices.disk = Disk::attach(path);
+}
+computer.load_source(&fs::read_to_string(&args.source)?)?;
 ```
+
+(Or pass the disk into a `Computer::new_with_disk(disk)` constructor
+if you'd rather keep `devices.disk` non-public — small style call.)
 
 ### 3. Device table
 
-`Devices` (from stages 3, 5, 6) gets the disk at index 5:
+`Devices` (which has existed since stage 2) gets a `disk` field at
+index 5. By the time stage 8 starts, the table will already include
+`line_input` (stage 6) at index 3 and `screen` (stage 7) at index 4:
 
 ```rust
 pub struct Devices {

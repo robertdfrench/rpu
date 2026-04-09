@@ -12,9 +12,10 @@ buffer is empty? We can't return `0`, because `0` is a perfectly
 valid byte the user might type. The answer is a one-bit status flag
 register, `rdy`, set by the CPU after each input read.
 
-This stage depends on the device table refactor (stage 4): the
-`in` pseudo-register dispatches through the same indexed device
-table that `out` does.
+This stage depends on stage 4's indexed device dispatch: the
+`in` pseudo-register dispatches through the same indexed lookup
+that `out` does. The `Devices` struct itself already exists from
+stage 2 — this stage just adds a new field to it.
 
 ## Design decisions
 
@@ -185,7 +186,8 @@ support that cleanly.
 
 ### 5. TUI integration
 
-Add `LineInput` to `Devices` (stage 4) at index 3:
+Add `LineInput` as a new field on the existing `Devices` struct
+(from stage 2) at index 3:
 
 | dvc | Device     |
 | --- | ---------- |
@@ -208,7 +210,7 @@ A new field on `UiState`:
 pub enum UiMode {
     Normal,
     InputPrompt { buffer: String },
-    GotoPrompt  { input: String },   // from stage 5
+    GotoPrompt  { input: String },   // from stage 5, if it lands
 }
 ```
 

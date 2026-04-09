@@ -17,9 +17,9 @@ RegisterName::out => {
 }
 ```
 
-Two specific problems:
+Three specific problems:
 
-1. **Adding a third device means editing this match.** Stages 6, 7,
+1. **Adding a new device means editing this match.** Stages 6, 7,
    and 8 each add a new device. We don't want to keep growing this.
 2. **`.unwrap()` on device writes** is hiding errors that should be
    surfaced as `ExecutionError`.
@@ -153,8 +153,13 @@ DVC_TTY)` instead of `... 2`. Stages 6/7/8 grow the table.
 
 ### Headless (`tests/cpu.rs`)
 
-- [ ] Writing to a non-existent dvc returns
-      `ExecutionError::NoSuchDevice(99)`:
+The existing `writing_to_tty_appends_chars` test (added in stage 2)
+uses an explicit `put 2 dvc` so it exercises the *intended* tty
+index, not the fallback. After this stage it should continue to
+pass with no changes — the dispatch shape changed but the index
+didn't.
+
+New test for the behavior change:
 
 ```rust
 #[test]
@@ -166,26 +171,9 @@ fn writing_to_unknown_dvc_errors() {
 }
 ```
 
-- [ ] Writing to dvc=2 (tty) appends to `c.devices.tty.contents()`.
-
-```rust
-#[test]
-fn writing_to_tty_appends_chars() {
-    let mut c = Computer::new();
-    c.load_source(
-        "put 2 dvc\n\
-         put 72 gp0\n\
-         copy gp0 out\n\
-         put 105 gp0\n\
-         copy gp0 out\n\
-         halt\n",
-    ).unwrap();
-    c.run_to_halt().unwrap();
-    assert_eq!(c.devices.tty.contents(), "Hi");
-}
-```
-
-- [ ] The `device_table_ordering_is_stable` unit test from above.
+Plus the `device_table_ordering_is_stable` unit test from above
+(probably belongs in `src/computer.rs`'s `tests` module since
+that's where `Devices` lives).
 
 ### Render (`tests/render.rs`)
 

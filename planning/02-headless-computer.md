@@ -350,8 +350,10 @@ This is what makes `tests/cpu.rs` work — integration tests only see
 - **`Program` retains its symbol table.** Add a
   `pub labels: HashMap<String, u16>` field on `Program` and
   populate it during compile. Stage 2 doesn't strictly need it,
-  but stages 3 (label-aware decoded sidebar) and 5 (jump-to-label
-  in the RAM navigator) both do, and it's a one-line cost now.
+  but it's cheap and may be useful to later stages (e.g. a
+  decoded-sidebar feature in stage 5, or a future label-aware
+  error message somewhere). One-line cost now, optional later
+  payoff.
 - **`Computer` lives in `src/computer.rs`.** New file. Keeps
   `lib.rs` from turning into a junk drawer.
 
