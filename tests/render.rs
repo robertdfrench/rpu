@@ -9,6 +9,7 @@
 //! cell positions, so cosmetic shifts (a column added, a border moved)
 //! don't break them — only changes to *what* is displayed.
 
+use ratatui::style::Color;
 use ratatui::{backend::TestBackend, Terminal};
 use rpu::tui::MEMORY_BYTES_PER_ROW;
 use rpu::{render, Computer, UiState, RAM};
@@ -26,6 +27,22 @@ fn buffer_to_string(buffer: &ratatui::buffer::Buffer) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Counts the number of buffer cells whose background color matches
+/// `bg`. Used by the change-highlight and region-color tests to
+/// verify that exactly the expected number of cells got the expected
+/// style.
+fn cells_with_bg(buffer: &ratatui::buffer::Buffer, bg: Color) -> usize {
+    let mut count = 0;
+    for y in 0..buffer.area.height {
+        for x in 0..buffer.area.width {
+            if buffer[(x, y)].style().bg == Some(bg) {
+                count += 1;
+            }
+        }
+    }
+    count
 }
 
 #[test]
@@ -102,6 +119,90 @@ fn printer_pane_shows_tty_output_after_running() {
     assert!(
         rendered.contains("Hi"),
         "expected 'Hi' in rendered printer pane:\n{rendered}",
+    );
+}
+
+/// Stage 5a: bytes that just changed in the most recent step are
+/// rendered with a blue background. Each byte cell is 5 chars wide,
+/// so two changed bytes should produce exactly 10 blue cells in the
+/// rendered buffer.
+#[test]
+fn changed_bytes_are_highlighted_after_step() {
+    let mut computer = Computer::new();
+    computer.load_source(
+        "put 257 gp0\n\
+         put 100 gp1\n\
+         write gp0 gp1\n\
+         halt\n",
+    ).unwrap();
+    computer.step().unwrap(); // put 257 gp0
+    computer.step().unwrap(); // put 100 gp1
+    computer.step().unwrap(); // write gp0 gp1 — memory[100..102] := [1, 1]
+
+    let backend = TestBackend::new(120, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut ui = UiState::default();
+    // Make sure row 12 (addresses 96..104) is in the visible window.
+    ui.memory_selected_row = 100 / MEMORY_BYTES_PER_ROW;
+    terminal.draw(|f| render(f, &computer, &mut ui)).unwrap();
+
+    let blue_cells = cells_with_bg(terminal.backend().buffer(), Color::Blue);
+    assert_eq!(
+        blue_cells, 10,
+        "expected 2 changed bytes × 5 cells each = 10 blue cells",
+    );
+}
+
+/// Stage 5a: the change highlight is per-step, not cumulative. After
+/// running an additional step that doesn't touch memory, the previous
+/// frame's blue cells should be gone.
+#[test]
+fn highlight_clears_on_next_step() {
+    let mut computer = Computer::new();
+    computer.load_source(
+        "put 257 gp0\n\
+         put 100 gp1\n\
+         write gp0 gp1\n\
+         halt\n",
+    ).unwrap();
+    computer.step().unwrap(); // put 257 gp0
+    computer.step().unwrap(); // put 100 gp1
+    computer.step().unwrap(); // write gp0 gp1 — memory changes
+    computer.step().unwrap(); // halt — no memory change
+
+    let backend = TestBackend::new(120, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut ui = UiState::default();
+    ui.memory_selected_row = 100 / MEMORY_BYTES_PER_ROW;
+    terminal.draw(|f| render(f, &computer, &mut ui)).unwrap();
+
+    let blue_cells = cells_with_bg(terminal.backend().buffer(), Color::Blue);
+    assert_eq!(
+        blue_cells, 0,
+        "highlight should clear after a non-mutating step",
+    );
+}
+
+/// Stage 5b: the four bytes at PC are rendered with a yellow
+/// background ("current instruction" region). With just `halt`
+/// loaded the program is exactly 4 bytes long, PC is at 0, so
+/// addresses 0..4 should all be yellow — that's 4 bytes × 5 cells
+/// each = 20 yellow cells.
+#[test]
+fn current_pc_region_is_yellow_highlighted() {
+    let mut computer = Computer::new();
+    computer.load_source("halt\n").unwrap();
+    // No step()s — we want PC at 0 with halt about to fire.
+
+    let backend = TestBackend::new(120, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut ui = UiState::default();
+    terminal.draw(|f| render(f, &computer, &mut ui)).unwrap();
+
+    let yellow_cells = cells_with_bg(terminal.backend().buffer(), Color::Yellow);
+    assert_eq!(
+        yellow_cells, 20,
+        "expected 4 PC bytes × 5 cells each = 20 yellow cells",
     );
 }
 

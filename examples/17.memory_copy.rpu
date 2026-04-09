@@ -1,6 +1,6 @@
 # This program stores five values in memory starting at address
-# 200, then copies all five to address 300.  It verifies the
-# copy by reading the first value back from address 300 and
+# 200, then copies all five to address 220.  It verifies the
+# copy by reading the first value back from address 220 and
 # displaying it on LCD0.
 
 ; --- Phase 1: Store [10, 20, 30, 40, 50] at addresses 200-208 ---
@@ -30,9 +30,9 @@ copy ans gp0
 put 50 gp2
 write gp2 gp0
 
-; --- Phase 2: Copy from 200-208 to 300-308 ---
+; --- Phase 2: Copy from 200-208 to 220-228 ---
 put 200 gp0       ; source pointer
-put 300 gp1       ; destination pointer
+put 220 gp1       ; destination pointer
 put 2   gp2       ; address step
 put 5   gp3       ; counter
 put 1   gp4       ; decrement
@@ -52,7 +52,7 @@ jump gp6 gp3      ; if counter == 0, done
 jump gp5 zero     ; else keep copying
 
 ; --- Verify: read the first copied value and display it ---
-put 300 gp0       .DONE
+put 220 gp0       .DONE
 read gp0 gp7
 put 0 dvc
 copy gp7 out      ; should display 10
@@ -61,6 +61,6 @@ halt
 
 ; Study questions:
 ; - Watch the memory pane during Phase 2. Can you see the values
-;   appearing at address 300 as the copy progresses?
+;   appearing at address 220 as the copy progresses?
 ; - What would happen if the source and destination ranges
 ;   overlapped (e.g. copying from 200 to 202)?

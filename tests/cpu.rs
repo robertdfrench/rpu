@@ -163,6 +163,46 @@ fn writing_to_unknown_dvc_errors() {
     );
 }
 
+/// `Computer::byte_changed(addr)` reflects only the most recent
+/// step, not the cumulative diff. This is the load-bearing
+/// invariant for the per-step change highlighting in the memory
+/// pane (stage 5a).
+#[test]
+fn byte_changed_reflects_only_most_recent_step() {
+    let mut c = Computer::new();
+    // 257 = 0x0101, so writing it as a u16 to addr 100 sets both
+    // memory[100] and memory[101] to 1 — both bytes flip from 0,
+    // making the test insensitive to byte ordering.
+    c.load_source(
+        "put 257 gp0\n\
+         put 100 gp1\n\
+         write gp0 gp1\n\
+         halt\n",
+    )
+    .unwrap();
+
+    // Before any step, nothing has changed yet.
+    assert!(!c.byte_changed(100));
+    assert!(!c.byte_changed(101));
+    assert!(!c.byte_changed(50));
+
+    c.step().unwrap(); // put 257 gp0 — register write only
+    assert!(!c.byte_changed(100));
+    assert!(!c.byte_changed(101));
+
+    c.step().unwrap(); // put 100 gp1 — register write only
+    assert!(!c.byte_changed(100));
+
+    c.step().unwrap(); // write gp0 gp1 — memory[100..102] := [1, 1]
+    assert!(c.byte_changed(100), "byte 100 should be marked changed");
+    assert!(c.byte_changed(101), "byte 101 should be marked changed");
+    assert!(!c.byte_changed(50), "byte 50 should not be marked changed");
+
+    c.step().unwrap(); // halt — no memory change; highlight clears
+    assert!(!c.byte_changed(100), "highlight should clear after non-mutating step");
+    assert!(!c.byte_changed(101));
+}
+
 /// `Computer::new()` plus `load_source` plus `run_to_halt` works
 /// without any tty / terminal / io setup at all. This test exists
 /// mostly as documentation: if it ever stops compiling because some

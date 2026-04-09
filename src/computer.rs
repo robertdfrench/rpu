@@ -4,7 +4,7 @@
 //! halt, and inspect device history; the TUI does the same but
 //! drives stepping from key events instead of `run_to_halt`.
 
-use crate::core::{Core, BootError, ExecutionError};
+use crate::core::{Core, BootError, ExecutionError, RAM};
 use crate::devices::{Device, Lcd, Tty};
 use crate::programs::Program;
 
@@ -55,6 +55,14 @@ pub struct Computer {
     pub core: Core,
     pub devices: Devices,
     pub program: Option<Program>,
+
+    /// Snapshot of `core.memory` taken at the *start* of the most
+    /// recent `step()`. Compared against the live memory at render
+    /// time so the TUI can flash bytes that just changed. Initialized
+    /// to match `core.memory` at boot, and re-synced inside
+    /// `load_source` so freshly loaded program bytes don't all show
+    /// up as "just changed" on the first frame.
+    last_step_memory: [u8; RAM],
 }
 
 impl Computer {
@@ -63,16 +71,23 @@ impl Computer {
             core: Core::new(),
             devices: Devices::new(),
             program: None,
+            // Both buffers start as all zeros, so byte_changed returns
+            // false for every address until something actually changes.
+            last_step_memory: [0; RAM],
         }
     }
 
     /// Compile a source string, load it into RAM, and remember the
     /// `Program` so the TUI can render its source lines and resolve
-    /// labels.
+    /// labels. After loading, the change-detection snapshot is
+    /// re-synced to the freshly loaded memory — otherwise the very
+    /// first frame would highlight every program byte as "just
+    /// changed", which is the wrong story.
     pub fn load_source(&mut self, src: &str) -> Result<(), BootError> {
         let program = Program::try_compile(src)?;
         self.core.load_program(&program)?;
         self.program = Some(program);
+        self.last_step_memory = self.core.memory;
         Ok(())
     }
 
@@ -83,10 +98,30 @@ impl Computer {
     /// Execute one instruction. Mirrors `Core::execute_single_instruction`
     /// but routes the device slice from `Devices::as_slice()` so
     /// callers don't have to assemble it themselves.
+    ///
+    /// As a side effect, snapshots `core.memory` *before* executing
+    /// so that `byte_changed(addr)` can report which bytes this step
+    /// touched. The snapshot is taken even if the instruction errors;
+    /// that's fine because no further steps will run after an error
+    /// anyway (and the snapshot only matters for what the next render
+    /// shows).
     pub fn step(&mut self) -> Result<(), ExecutionError> {
+        self.last_step_memory = self.core.memory;
         let mut slice = self.devices.as_slice();
         self.core.execute_single_instruction(&mut slice)?;
         Ok(())
+    }
+
+    /// Returns true if the byte at `addr` differs from its value at
+    /// the start of the most recent step. Used by the memory pane
+    /// renderer to flash recently-touched bytes. Always returns
+    /// false before any step has run, and always returns false for
+    /// addresses past the end of RAM (treated as "not changed"
+    /// rather than panicking).
+    pub fn byte_changed(&self, addr: u16) -> bool {
+        let i = addr as usize;
+        if i >= RAM { return false; }
+        self.core.memory[i] != self.last_step_memory[i]
     }
 
     /// Step until the CPU halts. Bails out with

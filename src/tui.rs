@@ -240,13 +240,70 @@ pub fn render(
     );
 
     render_memory(
-        &computer.core.memory,
+        computer,
         ui.memory_selected_row,
         &mut ui.memory_page_rows,
         layouts.memory,
         frame,
         "Memory"
     );
+}
+
+/// Coarse classification of a memory address into the kind of thing
+/// it currently holds. Used by the memory pane to color regions so
+/// students can visually pick out where the program, current
+/// instruction, and stack live without having to count bytes. The
+/// classification is derived from the live `Computer` state on every
+/// frame — there is no persistent state for this.
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum Region {
+    /// The four bytes of the next instruction to execute (`pc..pc+4`).
+    /// Wins over every other classification, including Program,
+    /// because students care more about "where am I?" than "what
+    /// kind of memory is this?".
+    Current,
+    /// Stack contents: addresses from `sp + 2` (the most recently
+    /// pushed value) up to and including `RAM - 2` (the bottom of
+    /// memory, where the stack starts). Empty when nothing has been
+    /// pushed.
+    Stack,
+    /// Loaded program bytes (`0..program.size()`).
+    Program,
+    /// Everything else — scratch / unused memory.
+    Unused,
+}
+
+fn region_of(addr: usize, computer: &Computer) -> Region {
+    let pc = computer.core.register_file.pc as usize;
+    if addr >= pc && addr < pc + 4 {
+        return Region::Current;
+    }
+    let sp = computer.core.register_file.sp as usize;
+    // The stack lives at addresses (sp + 2)..=(RAM - 2). Empty when
+    // sp + 2 > RAM - 2, which is its initial state.
+    if addr >= sp + 2 && addr + 1 < RAM {
+        return Region::Stack;
+    }
+    if let Some(p) = &computer.program {
+        if addr < p.size() {
+            return Region::Program;
+        }
+    }
+    Region::Unused
+}
+
+fn region_style(region: Region) -> Style {
+    match region {
+        // Yellow bg + black fg works on both light and dark
+        // terminal backgrounds.
+        Region::Current => Style::new().black().on_yellow().bold(),
+        // Plain (non-dim) magenta is distinct from program green
+        // and high-contrast on white backgrounds.
+        Region::Stack   => Style::new().magenta(),
+        // Plain green (no .dim() — dimmed green vanishes on white).
+        Region::Program => Style::new().green(),
+        Region::Unused  => Style::new(),
+    }
 }
 
 /// Draws the source-code list on the left side of the screen and
@@ -451,25 +508,37 @@ fn render_registers(
 
 /// Draws the memory pane: an `ADDR` column followed by 8 byte
 /// columns. Only the rows that fit in `area` are built — frame cost
-/// is constant in `RAM` size, not linear, which is what unblocked the
-/// 1 KiB pivot in stage 1.
+/// is constant in `RAM` size, not linear. Originally a stage 1
+/// optimization to support a larger RAM; today it's still the right
+/// shape even though `RAM` itself is small.
 ///
-/// `selected_row` is the row to highlight; the window is scrolled so
-/// that row sits in the middle when possible (clamped to the ends).
-/// As a side effect, writes the visible row count back through
-/// `page_rows_out` so the PgUp/PgDn handlers in `main.rs` can read it
-/// on the next key event.
+/// Each byte is styled by one of:
+/// - **Change highlight** (white-on-blue, bold) if the byte just
+///   changed in the most recent step. This is the killer feature
+///   from stage 5a — students press `n` and immediately see the
+///   bytes that just got written. Wins over region coloring.
+/// - **Region color** (5b) otherwise: yellow bg for the four bytes
+///   of the next instruction (`pc..pc+4`), dim cyan for stack
+///   contents, dim green for program bytes, default for unused.
+///
+/// `selected_row` is the row to highlight as "the one the cursor is
+/// on"; the window is scrolled so that row sits in the middle when
+/// possible (clamped to the ends). As a side effect, writes the
+/// visible row count back through `page_rows_out` so the PgUp/PgDn
+/// handlers in `main.rs` can read it on the next key event.
 fn render_memory(
-    memory: &[u8; RAM],
+    computer: &Computer,
     selected_row: usize,
     page_rows_out: &mut usize,
     area: Rect,
     frame: &mut Frame,
     title: &str,
 ) {
+    let memory = &computer.core.memory;
     let total_rows = memory.len() / MEMORY_BYTES_PER_ROW;
     let header_style = Style::new().bold();
-    let highlight_style = Style::new().red().italic();
+    let row_select_style = Style::new().red().italic();
+    let changed_style = Style::new().white().on_blue().bold();
 
     // Reserve: top border (1) + header (1) + blank (1) + bottom border (1).
     let visible_rows = (area.height as usize).saturating_sub(4);
@@ -505,16 +574,26 @@ fn render_memory(
         let row_idx = scroll_top + i;
         if row_idx >= total_rows { break; }
         let row_start = row_idx * MEMORY_BYTES_PER_ROW;
-        let row_end = row_start + MEMORY_BYTES_PER_ROW;
 
         let mut spans: Vec<Span> = Vec::with_capacity(MEMORY_BYTES_PER_ROW + 1);
         spans.push(Span::raw(format!("{:>5}", row_start)));
-        for byte in &memory[row_start..row_end] {
-            spans.push(Span::raw(format!("{:>5}", byte)));
+        for offset in 0..MEMORY_BYTES_PER_ROW {
+            let addr = row_start + offset;
+            let byte = memory[addr];
+            // Per-byte style priority: changed > region.
+            let style = if computer.byte_changed(addr as u16) {
+                changed_style
+            } else {
+                region_style(region_of(addr, computer))
+            };
+            spans.push(Span::styled(format!("{:>5}", byte), style));
         }
 
+        // The selected-row style is fg+italic only (no bg), so it
+        // composes cleanly with per-byte bg styles: a changed byte on
+        // the selected row still shows as white-on-blue.
         let line = if row_idx == selected_row {
-            Line::from(spans).style(highlight_style)
+            Line::from(spans).style(row_select_style)
         } else {
             Line::from(spans)
         };

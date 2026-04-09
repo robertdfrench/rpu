@@ -8,7 +8,7 @@ use crate::registers;
 use crate::devices::Device;
 use crate::devices;
 
-pub const RAM: usize = 1024;
+pub const RAM: usize = 256;
 
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError {
@@ -73,10 +73,10 @@ impl From<registers::AccessError> for ExecutionError {
 pub struct Core {
     pub register_file: RegisterFile,
 
-    /// 1 KiB of RAM. Small enough that students can scroll the
-    /// whole memory pane in a few page-downs and visually spot
-    /// what's changing. Programs that touch addresses past the end
-    /// get a clean `AddressOutOfBounds` error.
+    /// 256 bytes of RAM. Small enough that the whole address space
+    /// fits on one screen — no scrolling needed at all to see what
+    /// the program is doing. Programs that touch addresses past the
+    /// end get a clean `AddressOutOfBounds` error.
     pub memory: [u8; RAM],
 
     /// Is the CPU running? Becomes `false` when 'halt' is
