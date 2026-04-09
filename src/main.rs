@@ -1,34 +1,14 @@
-use ratatui::widgets::Block;
-use ratatui::widgets::Borders;
-use ratatui::layout:: Constraint;
-use ratatui::         DefaultTerminal;
-use ratatui::layout:: Direction;
+use ratatui::DefaultTerminal;
 use crossterm::event::Event;
 use crossterm::event::KeyCode;
-use ratatui::         Frame;
-use ratatui::layout:: Layout;
-use ratatui::text::   Line;
-use ratatui::widgets::List;
-use ratatui::widgets::ListState;
-use ratatui::widgets::Paragraph;
-use clap::            Parser;
-use std::path::       PathBuf;
-use rpu::programs::   Program;
-use rpu::core::       RAM;
-use rpu::             Computer;
-use rpu::             Lcd;
-use rpu::             Tty;
-use ratatui::layout:: Rect;
-use color_eyre::      Result;
-use ratatui::widgets::Row;
-use ratatui::text::   Span;
-use ratatui::style::  Style;
-use ratatui::style::  Stylize;
-use ratatui::widgets::Table;
-use crossterm::       event;
-use std::             fs;
-
-const MEMORY_BYTES_PER_ROW: usize = 8;
+use clap::Parser;
+use std::path::PathBuf;
+use rpu::core::RAM;
+use rpu::tui::MEMORY_BYTES_PER_ROW;
+use rpu::{render, Computer, UiState};
+use color_eyre::Result;
+use crossterm::event;
+use std::fs;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -52,32 +32,21 @@ pub fn main() -> Result<()> {
     result
 }
 
-/// TUI-side state that wraps a headless `Computer` and adds the
-/// view state the renderer needs (which line in the code pane is
-/// selected, where the memory pane is scrolled, etc.). Stage 3 will
-/// pull the view state out into a dedicated `UiState` so `render`
-/// can be called from tests against a `TestBackend`.
+/// Thin wrapper holding the headless `Computer` and the TUI view
+/// state side by side. The split lets the event loop borrow
+/// `&app.computer` and `&mut app.ui` independently when calling
+/// `render`, which the borrow checker would not allow if both fields
+/// lived inside the same struct.
 struct App {
     computer: Computer,
-    code_list_state: ListState,
-    /// Index of the highlighted memory row, in 8-byte rows. Drives
-    /// both the highlight and the scroll position of the memory pane.
-    memory_selected_row: usize,
-    /// How many memory rows fit in the pane on the most recent
-    /// frame. Set by `render_memory`, read by the PgUp/PgDn key
-    /// handlers so they can jump a full page at a time.
-    memory_page_rows: usize,
+    ui: UiState,
 }
 
 impl App {
     fn new(computer: Computer) -> Self {
         Self {
             computer,
-            code_list_state: ListState::default(),
-            memory_selected_row: 0,
-            // Conservative default until the first render measures
-            // the actual pane.
-            memory_page_rows: 1,
+            ui: UiState::default(),
         }
     }
 }
@@ -87,7 +56,7 @@ fn run(
     mut app: App,
 ) -> Result<()> {
     loop {
-        terminal.draw(|f| { render(&mut app, f); })?;
+        terminal.draw(|f| { render(f, &app.computer, &mut app.ui); })?;
         match event::read()? {
             Event::Key(ke) => {
                 match ke.code {
@@ -98,27 +67,27 @@ fn run(
                         break Ok(())
                     },
                     KeyCode::Down => {
-                        let new = app.code_list_state.offset() + 1;
-                        let current = app.code_list_state.offset_mut();
+                        let new = app.ui.code_list_state.offset() + 1;
+                        let current = app.ui.code_list_state.offset_mut();
                         *current = new;
                     },
                     KeyCode::Up => {
-                        let old = app.code_list_state.offset();
+                        let old = app.ui.code_list_state.offset();
                         let new = if old == 0 { 0 } else { old - 1 };
-                        let current = app.code_list_state.offset_mut();
+                        let current = app.ui.code_list_state.offset_mut();
                         *current = new;
                     },
                     KeyCode::PageDown => {
                         let total_rows = RAM / MEMORY_BYTES_PER_ROW;
                         let last = total_rows.saturating_sub(1);
-                        let jump = app.memory_page_rows.max(1);
-                        app.memory_selected_row =
-                            (app.memory_selected_row + jump).min(last);
+                        let jump = app.ui.memory_page_rows.max(1);
+                        app.ui.memory_selected_row =
+                            (app.ui.memory_selected_row + jump).min(last);
                     },
                     KeyCode::PageUp => {
-                        let jump = app.memory_page_rows.max(1);
-                        app.memory_selected_row =
-                            app.memory_selected_row.saturating_sub(jump);
+                        let jump = app.ui.memory_page_rows.max(1);
+                        app.ui.memory_selected_row =
+                            app.ui.memory_selected_row.saturating_sub(jump);
                     },
                     KeyCode::Char('n') => {
                         match app.computer.step() {
@@ -136,413 +105,4 @@ fn run(
             _ => {}
         }
     }
-}
-
-struct Layouts {
-    code: Rect,
-    help: Rect,
-    lcd0: Rect,
-    lcd1: Rect,
-    memory: Rect,
-    printer: Rect,
-    power_led: Rect,
-    registers: Rect,
-    special_registers: Rect,
-}
-
-impl Layouts {
-    fn new(frame: &Frame) -> Self {
-        let layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(vec![
-                Constraint::Percentage(100),
-                Constraint::Min(31),
-                Constraint::Min(55),
-            ])
-            .split(frame.area());
-
-        let lefthand_layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![
-                Constraint::Fill(1),
-                Constraint::Length(4)
-            ])
-            .split(layout[0]);
-        let code = lefthand_layout[0];
-        let help = lefthand_layout[1];
-
-        let devices_layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![
-                Constraint::Length(7),
-                Constraint::Length(7),
-                Constraint::Length(3),
-                Constraint::Fill(1),
-            ])
-            .split(layout[1]);
-        let lcd0 = devices_layout[0];
-        let lcd1 = devices_layout[1];
-        let power_led = devices_layout[2];
-        let printer = devices_layout[3];
-
-        let tools_layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![
-                Constraint::Length(4),
-                Constraint::Length(4),
-                Constraint::Fill(1),
-            ])
-            .split(layout[2]);
-        let registers = tools_layout[0];
-        let special_registers = tools_layout[1];
-        let memory = tools_layout[2];
-
-        Self {
-            code,
-            help,
-            lcd0,
-            lcd1,
-            memory,
-            registers,
-            special_registers,
-            printer,
-            power_led,
-        }
-    }
-}
-
-fn render(app: &mut App, frame: &mut Frame) {
-    let layouts = Layouts::new(frame);
-
-    // The TUI always has a program loaded by the time render() is
-    // called — `main()` loads one before constructing `App`.
-    let program = app.computer.program.as_ref()
-        .expect("render called before a program was loaded");
-
-    render_code(
-        program,
-        app.computer.core.register_file.pc,
-        &mut app.code_list_state,
-        layouts.code,
-        frame,
-        "Code"
-    );
-    render_help(layouts.help, frame, "Help");
-    render_lcd(
-        &app.computer.devices.lcd0,
-        layouts.lcd0,
-        frame,
-        "LCD0 (dvc 0)"
-    );
-    render_lcd(
-        &app.computer.devices.lcd1,
-        layouts.lcd1,
-        frame,
-        "LCD1 (dvc 1)"
-    );
-    render_led(
-        app.computer.core.power,
-        layouts.power_led,
-        frame,
-        "Power"
-    );
-    render_printer(
-        &app.computer.devices.tty,
-        layouts.printer,
-        frame,
-        "Error Console"
-    );
-
-    let gp_registers = vec![
-        ("gp0", app.computer.core.register_file.gp0),
-        ("gp1", app.computer.core.register_file.gp1),
-        ("gp2", app.computer.core.register_file.gp2),
-        ("gp3", app.computer.core.register_file.gp3),
-        ("gp4", app.computer.core.register_file.gp4),
-        ("gp5", app.computer.core.register_file.gp5),
-        ("gp6", app.computer.core.register_file.gp6),
-        ("gp7", app.computer.core.register_file.gp7),
-    ];
-    render_registers(
-        gp_registers,
-        layouts.registers,
-        frame,
-        "General Purpose Registers"
-    );
-
-    let sp_registers = vec![
-        ("ans", app.computer.core.register_file.ans),
-        ("dvc", app.computer.core.register_file.dvc),
-        ("pc",  app.computer.core.register_file.pc),
-        ("sp",  app.computer.core.register_file.sp),
-    ];
-    render_registers(
-        sp_registers,
-        layouts.special_registers,
-        frame,
-        "Special Purpose Registers"
-    );
-
-    // Memory
-    render_memory(
-        &app.computer.core.memory,
-        app.memory_selected_row,
-        &mut app.memory_page_rows,
-        layouts.memory,
-        frame,
-        "Memory"
-    );
-}
-
-fn render_code(
-    program: &Program,
-    pc: u16,
-    state: &mut ListState,
-    area: Rect,
-    frame: &mut Frame,
-    title: &str,
-) {
-    let current_line = program.source_addrs.get(&pc);
-    state.select(current_line.copied());
-    let items = program.source_lines.clone();
-    let list = List::new(items)
-        .block(common_block(title))
-        .highlight_style(Style::new().italic().red());
-
-    frame.render_stateful_widget(list, area, state);
-}
-
-fn render_help(
-    area: Rect,
-    frame: &mut Frame,
-    title: &str
-) {
-    let text_n = vec![
-        Line::from(vec![
-            Span::styled("n", Style::new().bold()),
-            Span::raw(" - execute next instruction")
-        ])
-    ];
-    let text_q = vec![
-        Line::from(vec![
-            Span::styled("q", Style::new().bold()),
-            Span::raw(" - exit this program")
-        ]),
-    ];
-    let text_up = vec![
-        Line::from(vec![
-            Span::styled("Up/Down", Style::new().bold()),
-            Span::raw(" - scroll code window")
-        ])
-    ];
-    let text_pgup = vec![
-        Line::from(vec![
-            Span::styled("PgUp/PgDown", Style::new().bold()),
-            Span::raw(" - scroll mem window")
-        ])
-    ];
-    let rows = [
-        Row::new([text_n, text_q]),
-        Row::new([text_up, text_pgup])
-    ];
-    let widths = vec![
-        Constraint::Length(28), Constraint::Length(31)
-    ];
-    let table = Table::new(rows, widths)
-        .column_spacing(4)
-        .block(common_block(title));
-    frame.render_widget(table, area);
-}
-
-fn render_led(
-    power: bool,
-    area: Rect,
-    frame: &mut Frame,
-    title: &str,
-) {
-    let content = match power {
-        true =>  " ON  ",
-        false => " OFF "
-    };
-    let style = match power {
-        true => Style::new().black().on_green(),
-        false => Style::new().white().on_red(),
-    };
-    let text = vec![
-        Line::from(vec![
-            Span::styled(
-                String::from(content),
-                style
-            )
-        ])
-    ];
-    let paragraph = Paragraph::new(text)
-        .block(common_block(title))
-        .centered();
-    frame.render_widget(paragraph, area);
-}
-
-/// Renders an `Lcd` device as a 5-row 7-segment display showing the
-/// most recently written value, zero-padded to 5 digits. Reads only
-/// `lcd.last_written()`; the full history is the test interface, not
-/// the render interface.
-fn render_lcd(
-    lcd: &Lcd,
-    area: Rect,
-    frame: &mut Frame,
-    title: &str,
-) {
-    let font_definition = include_str!("../lcd_font.txt");
-    let mut lcd_font: Vec<Vec<&str>> = vec![];
-    let mut current_lcd_char: Vec<&str> = vec![];
-    for (n, text) in font_definition.lines().enumerate() {
-        current_lcd_char.push(text);
-        if ((n + 1) % 5) == 0 {
-            lcd_font.push(current_lcd_char);
-            current_lcd_char = vec![];
-        }
-    }
-
-    let value = format!("{:0>5}", lcd.last_written().unwrap_or(0));
-    let mut content = String::new();
-    for row in 0..5 {
-        for c in value.chars() {
-            let char_id = match c {
-                '0' => 0,
-                '1' => 1,
-                '2' => 2,
-                '3' => 3,
-                '4' => 4,
-                '5' => 5,
-                '6' => 6,
-                '7' => 7,
-                '8' => 8,
-                '9' => 9,
-                _ => panic!()
-            };
-
-            content.push_str(lcd_font[char_id][row]);
-        }
-        content.push_str("\n");
-    }
-
-    let paragraph = Paragraph::new(content)
-        .block(common_block(title));
-    frame.render_widget(paragraph, area);
-}
-
-fn render_printer(
-    tty: &Tty,
-    area: Rect,
-    frame: &mut Frame,
-    title: &str
-) {
-    let paragraph = Paragraph::new(tty.contents().to_string())
-        .block(common_block(title));
-    frame.render_widget(paragraph, area);
-}
-
-fn render_registers(
-    pairs: Vec<(&str, u16)>,
-    area: Rect,
-    frame: &mut Frame,
-    title: &str
-) {
-    let cells: Vec<String> = (&pairs).into_iter().map(|(_, val)| {
-        format!("{:5}", val)
-    }).collect();
-    let rows = [Row::new(cells)];
-    let widths: Vec<Constraint> = (&pairs).into_iter().map(|_| {
-        Constraint::Length(5)
-    }).collect();
-    let block = common_block(title);
-    let header_cells: Vec<String> = (&pairs).into_iter().map(|(name, _)| {
-        format!("{:>5}", name)
-    }).collect();
-    let header = Row::new(header_cells)
-        .style(Style::new().bold());
-    let table = Table::new(rows, widths)
-        .column_spacing(1)
-        .header(header)
-        .block(block);
-    frame.render_widget(table, area);
-}
-
-fn render_memory(
-    memory: &[u8; RAM],
-    selected_row: usize,
-    page_rows_out: &mut usize,
-    area: Rect,
-    frame: &mut Frame,
-    title: &str,
-) {
-    // Only build the rows that will actually be drawn. The previous
-    // implementation built every row in RAM (~73,000 String allocs
-    // per frame at 64 KiB), which is what bottlenecked the original
-    // 256-byte build. With this version frame cost is constant in
-    // RAM size — we build at most `area.height` rows regardless.
-    let total_rows = memory.len() / MEMORY_BYTES_PER_ROW;
-    let header_style = Style::new().bold();
-    let highlight_style = Style::new().red().italic();
-
-    // Reserve: top border (1) + header (1) + blank (1) + bottom border (1).
-    let visible_rows = (area.height as usize).saturating_sub(4);
-    // Report back to the key handlers so PgUp/PgDn can jump a page.
-    *page_rows_out = visible_rows.max(1);
-    if visible_rows == 0 || total_rows == 0 {
-        let paragraph = Paragraph::new("").block(common_block(title));
-        frame.render_widget(paragraph, area);
-        return;
-    }
-
-    // Center the selected row in the window when possible, but keep
-    // the window inside [0, total_rows - visible_rows].
-    let half = visible_rows / 2;
-    let max_top = total_rows.saturating_sub(visible_rows);
-    let scroll_top = selected_row.saturating_sub(half).min(max_top);
-
-    let mut lines: Vec<Line> = Vec::with_capacity(visible_rows + 2);
-    lines.push(Line::from(vec![
-        Span::styled("ADDR ", header_style),
-        Span::styled("   +0", header_style),
-        Span::styled("   +1", header_style),
-        Span::styled("   +2", header_style),
-        Span::styled("   +3", header_style),
-        Span::styled("   +4", header_style),
-        Span::styled("   +5", header_style),
-        Span::styled("   +6", header_style),
-        Span::styled("   +7", header_style),
-    ]));
-    lines.push(Line::from(""));
-
-    for i in 0..visible_rows {
-        let row_idx = scroll_top + i;
-        if row_idx >= total_rows { break; }
-        let row_start = row_idx * MEMORY_BYTES_PER_ROW;
-        let row_end = row_start + MEMORY_BYTES_PER_ROW;
-
-        let mut spans: Vec<Span> = Vec::with_capacity(MEMORY_BYTES_PER_ROW + 1);
-        spans.push(Span::raw(format!("{:>5}", row_start)));
-        for byte in &memory[row_start..row_end] {
-            spans.push(Span::raw(format!("{:>5}", byte)));
-        }
-
-        let line = if row_idx == selected_row {
-            Line::from(spans).style(highlight_style)
-        } else {
-            Line::from(spans)
-        };
-        lines.push(line);
-    }
-
-    let paragraph = Paragraph::new(lines).block(common_block(title));
-    frame.render_widget(paragraph, area);
-}
-
-fn common_block(title: &str) -> Block<'_> {
-    let title = format!("[{title}]");
-    Block::new()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_style(Style::new().blue())
 }
