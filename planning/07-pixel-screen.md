@@ -241,9 +241,9 @@ lines; trim something else if needed.
 
 ### 4. Examples
 
-- `examples/14.bouncing_dot.s` — plot a single pixel and bounce it
+- `examples/14.bouncing_dot.rpu` — plot a single pixel and bounce it
   off the walls. Doesn't need input. Great smoke test.
-- `examples/15.draw_with_arrows.s` — read keys from `LineInput`
+- `examples/15.draw_with_arrows.rpu` — read keys from `LineInput`
   (or a future live keyboard device), interpret them as
   up/down/left/right, plot the cursor's new position. Requires
   stage 6.
@@ -291,7 +291,7 @@ let expected = Buffer::with_lines(vec![
 - [ ] `Screen` device exists and implements `Device`.
 - [ ] Lives at `dvc = 4` in the device table.
 - [ ] TUI shows the screen pane and updates it as the program runs.
-- [ ] `examples/14.bouncing_dot.s` runs and visibly bounces a dot.
+- [ ] `examples/14.bouncing_dot.rpu` runs and visibly bounces a dot.
 - [ ] All unit/render tests above pass.
 
 ## Notes for future me

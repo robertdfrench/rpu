@@ -40,12 +40,12 @@ crazy:
 *(Alternatively, `cargo run -- examples/blah` and `man ./rpu.6`
 will work just fine)*
 
-3. Run `rpu examples/print_5.s` to see how to write the number "5" to
-   LCD0.
-4. Run `rpu examples/add_5_6.s` to see how to add 5 + 7 and write "12"
+3. Run `rpu examples/01.print_5.rpu` to see how to write the number "5"
    to LCD0.
-5. Run `rpu examples/countdown.s` to see how to make LCD0 display the
-   numbers 5,4,3,2,1 in order.
-6. Run `rpu examples/fibonacci.s` to see how to compute the fibonacci
-   sequence, showing the latest number on LCD0, and the previous number
-   on LCD1.
+4. Run `rpu examples/02.add_5_7.rpu` to see how to add 5 + 7 and write
+   "12" to LCD0.
+5. Run `rpu examples/07.countdown.rpu` to see how to make LCD0 display
+   the numbers 5,4,3,2,1 in order.
+6. Run `rpu examples/09.fibonacci.rpu` to see how to compute the
+   fibonacci sequence, showing the latest number on LCD0, and the
+   previous number on LCD1.

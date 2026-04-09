@@ -263,7 +263,7 @@ fn add_outputs_sum_to_lcd0() {
 
 #[test]
 fn fibonacci_example_runs_to_halt() {
-    let src = std::fs::read_to_string("examples/09.fibonacci.s").unwrap();
+    let src = std::fs::read_to_string("examples/09.fibonacci.rpu").unwrap();
     let mut c = Computer::new();
     c.load_source(&src).unwrap();
     c.run_to_halt().unwrap();
@@ -342,8 +342,8 @@ This is what makes `tests/cpu.rs` work — integration tests only see
 - [ ] `tests/cpu.rs` exists with the integration tests above.
 - [ ] Brittle byte-layout assertions in `core.rs` tests are replaced
       with behavioral assertions through `Computer`.
-- [ ] At least one existing example file (`02.add_5_7.s` or
-      `09.fibonacci.s`) has an integration test that runs it to
+- [ ] At least one existing example file (`02.add_5_7.rpu` or
+      `09.fibonacci.rpu`) has an integration test that runs it to
       halt and asserts on output.
 
 ## Notes for future me

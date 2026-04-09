@@ -223,7 +223,7 @@ complication and it's easy.
 
 ### 6. Example program
 
-`examples/12.echo.s`:
+`examples/12.echo.rpu`:
 
 ```
 # Echo: read characters from the keyboard, write each one to LCD0
@@ -251,7 +251,7 @@ complication and it's easy.
   halt
 ```
 
-A second example, `13.adder.s`, that reads two single-digit numbers
+A second example, `13.adder.rpu`, that reads two single-digit numbers
 and prints the sum, would be a great smoke test for the whole
 keyboard → CPU → LCD path.
 
@@ -271,7 +271,7 @@ keyboard → CPU → LCD path.
 
 ### Integration test
 
-- [ ] Load `examples/12.echo.s`. Construct a `LineInput`,
+- [ ] Load `examples/12.echo.rpu`. Construct a `LineInput`,
       `submit_line("hi")`. Step until halt. Assert the LCD0 device's
       buffer contains `'h', 'i'`.
 
@@ -291,7 +291,7 @@ keyboard → CPU → LCD path.
       on `None`.
 - [ ] `LineInput` device exists and is at `dvc = 3`.
 - [ ] TUI has an input prompt mode wired into `LineInput`.
-- [ ] `examples/12.echo.s` runs correctly.
+- [ ] `examples/12.echo.rpu` runs correctly.
 - [ ] All the tests above pass.
 
 ## Notes for future me

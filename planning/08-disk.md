@@ -36,7 +36,7 @@ we can add seek later if a real example needs it.
 Specify the file path on the command line:
 
 ```sh
-rpu examples/16.save_counter.s --disk save.bin
+rpu examples/16.save_counter.rpu --disk save.bin
 ```
 
 If `--disk` is not provided, the device is still present but reads
@@ -261,7 +261,7 @@ That's clean and future-proof. Recommend doing it that way.
 
 ### 5. Examples
 
-`examples/16.save_counter.s`:
+`examples/16.save_counter.rpu`:
 
 ```
 # Counts from 1 to 5, writing each number to disk and to LCD0.
@@ -291,7 +291,7 @@ halt
 
 (Wait — this hits the same "jump if zero" inversion issue as the
 echo example. Comment carefully or restructure. Worth a second
-example, `17.read_disk.s`, that reads the same file and prints the
+example, `17.read_disk.rpu`, that reads the same file and prints the
 bytes to LCD0, demonstrating round-trip persistence.)
 
 ## Test plan
@@ -311,7 +311,7 @@ bytes to LCD0, demonstrating round-trip persistence.)
 
 ### Integration test
 
-- [ ] Run `examples/16.save_counter.s` twice in the same process
+- [ ] Run `examples/16.save_counter.rpu` twice in the same process
       against a tempfile, halt between, and assert the file grew
       from 5 bytes to 10.
 

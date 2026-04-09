@@ -110,7 +110,7 @@ use rpu::{render, Computer, UiState};
 
 #[test]
 fn lcd0_shows_result_after_running_add_program() {
-    let source = std::fs::read_to_string("examples/02.add_5_7.s").unwrap();
+    let source = std::fs::read_to_string("examples/02.add_5_7.rpu").unwrap();
     let mut computer = Computer::new();
     computer.load_source(&source).unwrap();
     computer.run_to_halt().unwrap();

@@ -13,7 +13,7 @@
 .
 .Sh SYNOPSIS
 .Nm rpu
-.Ar program.s
+.Ar program.rpu
 .
 .
 .
@@ -71,7 +71,7 @@ register.
 This is your best bet for adding two numbers.
 (Note that
 .Nm
-can only count to 65,536, so it will throw a fit and exit if
+can only count up to 65,535, so it will throw a fit and exit if
 your sum is bigger than that.)
 .
 .\" copy
@@ -121,7 +121,7 @@ and store the answer in
 .Ic \&ans .
 (Note that
 .Nm
-can only count to 65,536, so it will throw a fit and exit if
+can only count up to 65,535, so it will throw a fit and exit if
 your product is bigger than that.)
 .
 .\" noop
@@ -494,10 +494,6 @@ jump gp6
 cannot resume after cpu errors.
 You just gotta quit and restart.
 Don't write bugs.
-.
-.Pp
-Scrolling through memory happens one line at a time.
-It can take several minutes to reach the top addresses, where the stack is.
 .
 .Pp
 If you write a comment on a line that defines a label,

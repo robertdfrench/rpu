@@ -1,0 +1,27 @@
+filetype: rpu
+
+detect:
+    filename: '\.rpu$'
+
+rules:
+    # Instructions (the 12-instruction ISA).
+    - statement: '\b(halt|add|copy|jump|mul|noop|pop|push|put|sub|write|read)\b'
+
+    # Registers and pseudo-registers.
+    - type: '\b(gp[0-7]|ans|dvc|out|pc|sp|zero)\b'
+
+    # Decimal literals. Listed before labels so the digit-only check
+    # never accidentally matches a label suffix.
+    - constant.number: '\b[0-9]+\b'
+
+    # Labels: a token starting with a dot, followed by a letter or
+    # underscore and then word characters. Matches both label
+    # definitions (`.LOOP` at end of line) and references (`.DONE` as
+    # an operand).
+    - special: '\.[A-Za-z_][A-Za-z0-9_]*'
+
+    # Whole-line comments. The assembler only accepts `#` or `;` at
+    # the very start of the line — no inline comments, no leading
+    # whitespace — so the highlighter follows the same rule.
+    - comment: '^#.*$'
+    - comment: '^;.*$'
