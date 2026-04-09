@@ -1,33 +1,34 @@
-use ratatui::widgets::Block; 
-use ratatui::widgets::Borders; 
-use rpu::core::       Core; 
-use ratatui::layout:: Constraint; 
-use ratatui::         DefaultTerminal; 
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
+use rpu::core::       Core;
+use ratatui::layout:: Constraint;
+use ratatui::         DefaultTerminal;
 use rpu::devices::    Device;
-use ratatui::layout:: Direction; 
-use crossterm::event::Event; 
-use crossterm::event::KeyCode; 
-use ratatui::         Frame; 
-use ratatui::layout:: Layout; 
+use ratatui::layout:: Direction;
+use crossterm::event::Event;
+use crossterm::event::KeyCode;
+use ratatui::         Frame;
+use ratatui::layout:: Layout;
 use ratatui::text::   Line;
 use ratatui::widgets::List;
 use ratatui::widgets::ListState;
-use ratatui::widgets::Paragraph; 
+use ratatui::widgets::Paragraph;
 use clap::            Parser;
 use std::path::       PathBuf;
-use rpu::programs::   Program; 
+use rpu::programs::   Program;
 use rpu::core::       RAM;
-use ratatui::layout:: Rect; 
-use color_eyre::      Result; 
-use ratatui::widgets::Row; 
+use ratatui::layout:: Rect;
+use color_eyre::      Result;
+use ratatui::widgets::Row;
 use ratatui::text::   Span;
-use ratatui::style::  Style; 
-use ratatui::style::  Stylize; 
-use ratatui::widgets::Table; 
-use ratatui::widgets::TableState; 
+use ratatui::style::  Style;
+use ratatui::style::  Stylize;
+use ratatui::widgets::Table;
 use rpu::             devices;
-use crossterm::       event; 
-use std::             fs; 
+use crossterm::       event;
+use std::             fs;
+
+const MEMORY_BYTES_PER_ROW: usize = 8;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -88,12 +89,15 @@ fn run(
                         *current = new;
                     },
                     KeyCode::PageDown => {
-                        computer.memory_table_state
-                            .select_next();
+                        let total_rows = RAM / MEMORY_BYTES_PER_ROW;
+                        if computer.memory_selected_row + 1 < total_rows {
+                            computer.memory_selected_row += 1;
+                        }
                     },
                     KeyCode::PageUp => {
-                        computer.memory_table_state
-                            .select_previous();
+                        if computer.memory_selected_row > 0 {
+                            computer.memory_selected_row -= 1;
+                        }
                     },
                     KeyCode::Char('n') => {
                         let mut devices: Vec<&mut dyn Device> = vec![
@@ -128,7 +132,10 @@ struct Computer {
     lcd0: LCD,
     lcd1: LCD,
     code_list_state: ListState,
-    memory_table_state: TableState,
+    /// Index of the highlighted memory row, in 8-byte rows.
+    /// Drives both the highlight and the scroll position of the
+    /// memory pane.
+    memory_selected_row: usize,
 }
 
 impl Computer {
@@ -139,8 +146,7 @@ impl Computer {
             lcd0: LCD::default(),
             lcd1: LCD::default(),
             code_list_state: ListState::default(),
-            memory_table_state: TableState::new()
-                .with_selected(Some(0)),
+            memory_selected_row: 0,
         }
     }
 }
@@ -289,7 +295,7 @@ fn render(computer: &mut Computer, frame: &mut Frame) {
     // Memory
     render_memory(
         &computer.core.memory,
-        &mut computer.memory_table_state,
+        computer.memory_selected_row,
         layouts.memory,
         frame,
         "Memory"
@@ -493,60 +499,70 @@ fn render_registers(
 
 fn render_memory(
     memory: &[u8; RAM],
-    state: &mut TableState,
+    selected_row: usize,
     area: Rect,
     frame: &mut Frame,
     title: &str,
 ) {
-    let mut rows: Vec<Row> = vec![];
-    let mut current_row: Vec<String> = vec![];
-    current_row.push(String::from("    0"));
-    for (addr, byte) in memory.iter().enumerate() {
-        current_row.push(format!("{:5}", byte));
-        if (addr + 1) % 8 == 0 {
-            let style = match (addr / 8) % 2 == 0 {
-                true => Style::default(),
-                false => Style::default(),
-            };
-            rows.push(
-                Row::new(current_row).style(style)
-            );
-            current_row = vec![];
-            current_row.push(format!("{:>5}", addr+1));
-        }
-    }
-    let widths = [
-        Constraint::Length(5),
-        Constraint::Length(5),
-        Constraint::Length(5),
-        Constraint::Length(5),
-        Constraint::Length(5),
-        Constraint::Length(5),
-        Constraint::Length(5),
-        Constraint::Length(5),
-        Constraint::Length(5),
-    ];
-    let table = Table::new(rows, widths)
-        .column_spacing(1)
-        .header(
-            Row::new(vec![
-                "ADDR ",
-                "   +0",
-                "   +1",
-                "   +2",
-                "   +3",
-                "   +4",
-                "   +5",
-                "   +6",
-                "   +7",
-            ])
-                .style(Style::new().bold())
-                .bottom_margin(1)
-        )
-        .row_highlight_style(Style::new().red().italic())
-        .block( common_block(title));
-    frame.render_stateful_widget(table, area, state);
+    // Only build the rows that will actually be drawn. The previous
+    // implementation built every row in RAM (~73,000 String allocs
+    // per frame at 64 KiB), which is what bottlenecked the original
+    // 256-byte build. With this version frame cost is constant in
+    // RAM size — we build at most `area.height` rows regardless.
+    let total_rows = memory.len() / MEMORY_BYTES_PER_ROW;
+    let header_style = Style::new().bold();
+    let highlight_style = Style::new().red().italic();
 
+    // Reserve: top border (1) + header (1) + blank (1) + bottom border (1).
+    let visible_rows = (area.height as usize).saturating_sub(4);
+    if visible_rows == 0 || total_rows == 0 {
+        let paragraph = Paragraph::new("").block(common_block(title));
+        frame.render_widget(paragraph, area);
+        return;
+    }
+
+    // Center the selected row in the window when possible, but keep
+    // the window inside [0, total_rows - visible_rows].
+    let half = visible_rows / 2;
+    let max_top = total_rows.saturating_sub(visible_rows);
+    let scroll_top = selected_row.saturating_sub(half).min(max_top);
+
+    let mut lines: Vec<Line> = Vec::with_capacity(visible_rows + 2);
+    lines.push(Line::from(vec![
+        Span::styled("ADDR ", header_style),
+        Span::styled("   +0", header_style),
+        Span::styled("   +1", header_style),
+        Span::styled("   +2", header_style),
+        Span::styled("   +3", header_style),
+        Span::styled("   +4", header_style),
+        Span::styled("   +5", header_style),
+        Span::styled("   +6", header_style),
+        Span::styled("   +7", header_style),
+    ]));
+    lines.push(Line::from(""));
+
+    for i in 0..visible_rows {
+        let row_idx = scroll_top + i;
+        if row_idx >= total_rows { break; }
+        let row_start = row_idx * MEMORY_BYTES_PER_ROW;
+        let row_end = row_start + MEMORY_BYTES_PER_ROW;
+
+        let mut spans: Vec<Span> = Vec::with_capacity(MEMORY_BYTES_PER_ROW + 1);
+        spans.push(Span::raw(format!("{:>5}", row_start)));
+        for byte in &memory[row_start..row_end] {
+            spans.push(Span::raw(format!("{:>5}", byte)));
+        }
+
+        let line = if row_idx == selected_row {
+            Line::from(spans).style(highlight_style)
+        } else {
+            Line::from(spans)
+        };
+        lines.push(line);
+    }
+
+    let paragraph = Paragraph::new(lines).block(common_block(title));
+    frame.render_widget(paragraph, area);
 }
 
 fn common_block(title: &str) -> Block {
