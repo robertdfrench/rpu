@@ -206,7 +206,7 @@ pub fn render(
         &computer.devices.tty,
         layouts.printer,
         frame,
-        "Error Console"
+        "TTY (dvc 2)"
     );
 
     let gp_registers = vec![
@@ -404,9 +404,11 @@ fn render_lcd(
     frame.render_widget(paragraph, area);
 }
 
-/// Draws the tty buffer as a free-form text block. Used as the error
-/// console today; will likely host the input prompt in stage 5
-/// (input device).
+/// Draws the tty buffer (dvc 2) as a free-form text block. Programs
+/// write to it via `copy <reg> out` after `put 2 dvc`. The TUI's
+/// step loop also `push_line`s `ExecutionError`s here for now —
+/// that will move to a dedicated STATUS pane in a later stage (see
+/// the error-handling-reform note).
 fn render_printer(
     tty: &Tty,
     area: Rect,

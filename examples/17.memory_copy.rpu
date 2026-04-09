@@ -1,0 +1,66 @@
+# This program stores five values in memory starting at address
+# 200, then copies all five to address 300.  It verifies the
+# copy by reading the first value back from address 300 and
+# displaying it on LCD0.
+
+; --- Phase 1: Store [10, 20, 30, 40, 50] at addresses 200-208 ---
+put 200 gp0       ; address pointer
+put 2   gp1       ; address step
+
+put 10 gp2
+write gp2 gp0
+add gp0 gp1
+copy ans gp0
+
+put 20 gp2
+write gp2 gp0
+add gp0 gp1
+copy ans gp0
+
+put 30 gp2
+write gp2 gp0
+add gp0 gp1
+copy ans gp0
+
+put 40 gp2
+write gp2 gp0
+add gp0 gp1
+copy ans gp0
+
+put 50 gp2
+write gp2 gp0
+
+; --- Phase 2: Copy from 200-208 to 300-308 ---
+put 200 gp0       ; source pointer
+put 300 gp1       ; destination pointer
+put 2   gp2       ; address step
+put 5   gp3       ; counter
+put 1   gp4       ; decrement
+put .COPY gp5
+put .DONE gp6
+
+noop .COPY
+read gp0 gp7      ; read one value from source
+write gp7 gp1     ; write it to destination
+add gp0 gp2       ; advance source pointer
+copy ans gp0
+add gp1 gp2       ; advance destination pointer
+copy ans gp1
+sub gp3 gp4       ; counter--
+copy ans gp3
+jump gp6 gp3      ; if counter == 0, done
+jump gp5 zero     ; else keep copying
+
+; --- Verify: read the first copied value and display it ---
+put 300 gp0       .DONE
+read gp0 gp7
+put 0 dvc
+copy gp7 out      ; should display 10
+
+halt
+
+; Study questions:
+; - Watch the memory pane during Phase 2. Can you see the values
+;   appearing at address 300 as the copy progresses?
+; - What would happen if the source and destination ranges
+;   overlapped (e.g. copying from 200 to 202)?

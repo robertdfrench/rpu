@@ -1,0 +1,28 @@
+# This example copies a value through a chain of registers to
+# prove that 'copy' does not destroy the source register.
+
+; Start by putting 42 into gp0.
+put 42 gp0
+
+; Now copy gp0 into gp1, then gp1 into gp2, and so on.
+; After each copy, notice that the source register still holds
+; its value -- 'copy' reads the source but does not erase it.
+copy gp0 gp1
+copy gp1 gp2
+copy gp2 gp3
+copy gp3 gp4
+
+; Display gp4 on LCD0. It should be 42 -- the value has traveled
+; through four copies and arrived intact.
+put 0 dvc
+copy gp4 out
+
+; Display gp0 on LCD1. It should still be 42 -- the original
+; was never erased.
+put 1 dvc
+copy gp0 out
+
+halt
+
+; Bonus question: What happens if you copy a register into itself?
+; Try 'copy gp0 gp0' and observe what happens.

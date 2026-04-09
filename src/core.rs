@@ -6,6 +6,7 @@ use crate::programs;
 use crate::instructions;
 use crate::registers;
 use crate::devices::Device;
+use crate::devices;
 
 pub const RAM: usize = 1024;
 
@@ -36,9 +37,25 @@ pub enum ExecutionError {
     /// an infinite loop without a `halt`.
     StepLimitExceeded,
 
+    /// The program selected a `dvc` value that doesn't map to any
+    /// device in the device table. Holds the offending dvc value.
+    /// Replaces the old "fall back to tty" behavior.
+    NoSuchDevice(u16),
+
+    /// A device's `write` or `read` returned an error. Bubbles the
+    /// underlying `devices::Error` so the cause is visible in the
+    /// error console.
+    Device(devices::Error),
+
     Decode(instructions::DecodeError),
 
     Access(registers::AccessError)
+}
+
+impl From<devices::Error> for ExecutionError {
+    fn from(other: devices::Error) -> Self {
+        Self::Device(other)
+    }
 }
 
 impl From<instructions::DecodeError> for ExecutionError {
@@ -179,15 +196,17 @@ impl Core {
                 ExecutionError::CannotCpTo(dst)
             ), 
             RegisterName::out => {
-                // Stage 2 keeps the dispatch hardcoded to indices
-                // 0 / 1 / "fallback to tty (index 2)". Stage 4 will
-                // replace this with proper indexed lookup that
-                // surfaces NoSuchDevice as a real ExecutionError.
-                match self.register_file.dvc {
-                    0 => { devices[0].write(val).unwrap(); },
-                    1 => { devices[1].write(val).unwrap(); },
-                    _ => { devices[2].write(val).unwrap(); },
-                }
+                // Indexed dispatch through the device table. Adding
+                // a new device is now a one-line change in
+                // `Devices::as_slice()` — `core.rs` doesn't need to
+                // know how many devices exist or what they are. An
+                // unknown `dvc` is a clean execution error instead
+                // of the old silent-fallback-to-tty behavior.
+                let dvc = self.register_file.dvc as usize;
+                let device = devices
+                    .get_mut(dvc)
+                    .ok_or(ExecutionError::NoSuchDevice(dvc as u16))?;
+                device.write(val)?;
                 Ok(())
             },
             _ => {

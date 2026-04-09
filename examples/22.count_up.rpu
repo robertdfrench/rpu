@@ -1,0 +1,41 @@
+# This program counts UP from 1 to 10, displaying each number
+# on LCD0. Compare this to example 07, which counts DOWN.
+
+; current = 1 (the number we are about to display)
+put 1 gp0
+
+; remaining = 10 (how many more numbers to show)
+put 10 gp1
+
+; decrement = 1
+put 1 gp2
+
+put .LOOP gp3
+put .DONE gp4
+
+noop .LOOP
+; Display the current number on LCD0
+put 0 dvc
+copy gp0 out
+
+; Move to the next number
+add gp0 gp2
+copy ans gp0
+
+; One fewer number remaining
+sub gp1 gp2
+copy ans gp1
+
+; If remaining == 0, we are done
+jump gp4 gp1
+
+; Otherwise, keep counting
+jump gp3 zero
+
+halt .DONE
+
+; Study questions:
+; - Example 07 counts DOWN (5, 4, 3, 2, 1). This example counts
+;   UP (1, 2, 3, ..., 10). How are the loops different?
+; - What would you change to count from 1 to 20?
+; - Can you make LCD1 show the remaining count at the same time?

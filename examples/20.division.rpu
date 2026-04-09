@@ -1,0 +1,45 @@
+# This program divides 100 by 5 using repeated subtraction.
+# The quotient (20) is displayed on LCD0.
+
+; dividend = 100 (the number being divided)
+put 100 gp0
+
+; divisor = 5
+put 5 gp1
+
+; quotient = 0 (counts how many times we subtracted)
+put 0 gp2
+
+; increment = 1
+put 1 gp3
+
+put .LOOP gp4
+put .DONE gp5
+
+noop .LOOP
+; Subtract divisor from dividend.
+sub gp0 gp1
+copy ans gp0
+
+; Increment quotient.
+add gp2 gp3
+copy ans gp2
+
+; If dividend == 0, division is exact and we're done.
+jump gp5 gp0
+
+; Otherwise, keep subtracting.
+jump gp4 zero
+
+; Display the quotient on LCD0
+put 0 dvc         .DONE
+copy gp2 out
+
+halt
+
+; Study questions:
+; - This program only works for exact division (no remainder).
+;   What would happen if you changed the divisor to 7?
+; - How would you modify the program to also compute the
+;   remainder? (Hint: the remainder is whatever is left in
+;   gp0 when the dividend is smaller than the divisor.)

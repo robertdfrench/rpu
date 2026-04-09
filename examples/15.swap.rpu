@@ -1,0 +1,37 @@
+# This example swaps the values of two registers without using a
+# third temporary register. The trick uses only 'add', 'sub', and
+# 'copy'.
+
+; Set initial values: gp0 = 10, gp1 = 20
+put 10 gp0
+put 20 gp1
+
+; Show the "before" state on the LCDs.
+put 0 dvc
+copy gp0 out
+put 1 dvc
+copy gp1 out
+
+; --- The swap ---
+; Step 1: gp0 = gp0 + gp1 (10 + 20 = 30)
+add gp0 gp1
+copy ans gp0
+
+; Step 2: gp1 = gp0 - gp1 (30 - 20 = 10, which was the old gp0)
+sub gp0 gp1
+copy ans gp1
+
+; Step 3: gp0 = gp0 - gp1 (30 - 10 = 20, which was the old gp1)
+sub gp0 gp1
+copy ans gp0
+
+; Show the "after" state: gp0 = 20, gp1 = 10
+put 0 dvc
+copy gp0 out
+put 1 dvc
+copy gp1 out
+
+halt
+
+; Challenge: Can you think of another way to swap two registers?
+; Hint: look at the 'push' and 'pop' instructions.

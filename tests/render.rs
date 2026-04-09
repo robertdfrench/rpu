@@ -78,6 +78,34 @@ fn lcd0_shows_result_after_running_add_program() {
 }
 
 #[test]
+fn printer_pane_shows_tty_output_after_running() {
+    // Print "Hi" to the tty (dvc 2): 'H' = 72, 'i' = 105.
+    let mut computer = Computer::new();
+    computer.load_source(
+        "put 2 dvc\n\
+         put 72 gp0\n\
+         copy gp0 out\n\
+         put 105 gp0\n\
+         copy gp0 out\n\
+         halt\n",
+    ).unwrap();
+    computer.run_to_halt().unwrap();
+
+    let backend = TestBackend::new(120, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut ui = UiState::default();
+    terminal.draw(|f| render(f, &computer, &mut ui)).unwrap();
+
+    // The printer pane is rendered as plain text, so "Hi" should
+    // appear verbatim in the buffer.
+    let rendered = buffer_to_string(terminal.backend().buffer());
+    assert!(
+        rendered.contains("Hi"),
+        "expected 'Hi' in rendered printer pane:\n{rendered}",
+    );
+}
+
+#[test]
 fn memory_pane_scrolls_to_the_end_of_ram() {
     // Any program will do; we just need `program: Some(_)` so render
     // doesn't panic.

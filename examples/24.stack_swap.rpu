@@ -1,0 +1,43 @@
+# This program uses the stack to swap the values of two registers.
+# It is a simpler alternative to the arithmetic swap in example 15.
+
+; Set initial values: gp0 = 100, gp1 = 200
+put 100 gp0
+put 200 gp1
+
+; Show the "before" state
+put 0 dvc
+copy gp0 out
+put 1 dvc
+copy gp1 out
+
+; Push gp0 onto the stack, then gp1.
+; The stack now contains: [..., 100, 200]
+; (200 is on top because it was pushed last.)
+push gp0
+push gp1
+
+; Pop from the stack back into the registers, but in the
+; opposite order.  The first pop gives us 200 (the old gp1)
+; and the second pop gives us 100 (the old gp0).
+pop gp0            ; gp0 = 200 (the value that WAS in gp1)
+pop gp1            ; gp1 = 100 (the value that WAS in gp0)
+
+; Show the "after" state
+put 0 dvc
+copy gp0 out
+put 1 dvc
+copy gp1 out
+
+halt
+
+; Study questions:
+; - Compare this to example 15 (the arithmetic swap). Which
+;   approach is easier to understand? Which uses fewer
+;   instructions?
+; - What would happen if you pushed gp0 and gp1, but then
+;   popped back into the same registers in the SAME order
+;   (pop gp0, then pop gp1)? Would anything change?
+; - The stack is stored in memory. Can you see the values
+;   appear and disappear in the memory pane when push and
+;   pop execute?

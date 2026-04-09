@@ -18,10 +18,6 @@ pub const STEP_LIMIT: usize = 1_000_000;
 /// tests and the TUI can grab specific devices with their concrete
 /// types (no `dyn Device` downcasting). The CPU sees them through
 /// the `as_slice()` view, indexed by `dvc`.
-///
-/// Stage 4 will replace the hardcoded `match dvc` in `core.rs::copy`
-/// with proper indexed lookup; this struct is already shaped for
-/// that.
 pub struct Devices {
     pub lcd0: Lcd,
     pub lcd1: Lcd,
@@ -37,10 +33,14 @@ impl Devices {
         }
     }
 
-    /// View of the device table indexed by `dvc` value:
-    /// `[0]=lcd0, [1]=lcd1, [2]=tty`. Stage 4 will start treating
-    /// this as the source of truth for dispatch.
+    /// View of the device table indexed by `dvc` value. The order is
+    /// load-bearing — it defines what each `dvc` value means at
+    /// runtime — and is locked in by `device_table_ordering_is_stable`
+    /// in this module's tests. When you add a device here, also add
+    /// a matching `DVC_*` constant in `devices.rs` and an assertion
+    /// to that test.
     pub fn as_slice(&mut self) -> [&mut dyn Device; 3] {
+        // [0]=lcd0, [1]=lcd1, [2]=tty
         [&mut self.lcd0, &mut self.lcd1, &mut self.tty]
     }
 }
@@ -106,5 +106,40 @@ impl Computer {
 impl Default for Computer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::devices::{DVC_LCD0, DVC_LCD1, DVC_TTY};
+
+    /// Locks in the order of devices in `Devices::as_slice()`. The
+    /// order is what gives each `dvc` literal its meaning at runtime,
+    /// so a future "I'll just reorder the array" mistake would
+    /// silently rebind every program's device IDs. This test makes
+    /// that mistake loud.
+    ///
+    /// Strategy: write a unique sentinel through each slice index,
+    /// then read it back through the *typed* field on `Devices`. If
+    /// `[0]` lands in `lcd0`, `[1]` in `lcd1`, and `[2]` in `tty`,
+    /// the order is correct. When a new device is added, this test
+    /// gets one more sentinel + one more typed assertion.
+    #[test]
+    fn device_table_ordering_is_stable() {
+        let mut devices = Devices::new();
+
+        assert_eq!(devices.as_slice().len(), 3);
+
+        // Each write borrows a fresh slice — `as_slice` returns
+        // mutable references, so we can't hold the whole slice and
+        // also touch typed fields afterward.
+        devices.as_slice()[DVC_LCD0 as usize].write(101).unwrap();
+        devices.as_slice()[DVC_LCD1 as usize].write(102).unwrap();
+        devices.as_slice()[DVC_TTY  as usize].write(b'g' as u16).unwrap();
+
+        assert_eq!(devices.lcd0.last_written(), Some(101));
+        assert_eq!(devices.lcd1.last_written(), Some(102));
+        assert_eq!(devices.tty.contents(), "g");
     }
 }

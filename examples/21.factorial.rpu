@@ -1,0 +1,41 @@
+# This program computes 7 factorial (7! = 5040).
+# 7! = 7 * 6 * 5 * 4 * 3 * 2 * 1
+
+; accumulator = 1
+put 1 gp0
+
+; counter = 7 (will count down: 7, 6, 5, 4, 3, 2, 1)
+put 7 gp1
+
+; decrement = 1
+put 1 gp2
+
+put .LOOP gp3
+put .DONE gp4
+
+noop .LOOP
+; Multiply accumulator by counter.
+mul gp0 gp1
+copy ans gp0
+
+; Decrement counter.
+sub gp1 gp2
+copy ans gp1
+
+; If counter == 0, we're done.
+jump gp4 gp1
+
+; Otherwise, loop.
+jump gp3 zero
+
+; Display the result on LCD0
+put 0 dvc         .DONE
+copy gp0 out
+
+halt
+
+; Study questions:
+; - What is the largest factorial that fits in a 16-bit
+;   register? Try changing 7 to 8, 9, 10... and see.
+; - Why does the accumulator start at 1 instead of 0?
+;   What would happen if you started at 0?

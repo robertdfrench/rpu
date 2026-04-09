@@ -1,0 +1,27 @@
+# This program writes the text "Hi!" to the TTY device. The TTY
+# is device 2 -- unlike the LCDs, which display numbers, the TTY
+# interprets each value as an ASCII character code.
+
+; Select the TTY as our output device.
+put 2 dvc
+
+; Each character has a numeric code (called its "ASCII code").
+; H = 72, i = 105, ! = 33. We write each code to the TTY.
+put 72 gp0
+copy gp0 out
+
+put 105 gp0
+copy gp0 out
+
+put 33 gp0
+copy gp0 out
+
+halt
+
+; Study questions:
+; - Look at the "Error Console" pane in the TUI. You should see
+;   "Hi!" appear there. The TTY device renders numbers as text!
+; - What happens if you write the number 10 to the TTY?
+;   (Hint: 10 is the ASCII code for "newline".)
+; - Try writing your name using ASCII codes. You can find a
+;   full ASCII table by searching the web.

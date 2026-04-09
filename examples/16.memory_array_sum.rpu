@@ -1,0 +1,64 @@
+# This program stores an array of five numbers in memory, then
+# loops through them to compute their sum.
+#
+# The array is [10, 20, 30, 40, 50] starting at address 200.
+# Each 'write' stores a full u16 (2 bytes), so the elements live
+# at addresses 200, 202, 204, 206, and 208.
+# Expected result: 150 on LCD0.
+
+; --- Phase 1: Store the array ---
+put 200 gp2       ; address pointer
+put 2   gp1       ; address step (2 bytes per u16)
+
+put 10 gp0
+write gp0 gp2
+add gp2 gp1
+copy ans gp2
+
+put 20 gp0
+write gp0 gp2
+add gp2 gp1
+copy ans gp2
+
+put 30 gp0
+write gp0 gp2
+add gp2 gp1
+copy ans gp2
+
+put 40 gp0
+write gp0 gp2
+add gp2 gp1
+copy ans gp2
+
+put 50 gp0
+write gp0 gp2
+
+; --- Phase 2: Sum the array ---
+put 0   gp0       ; accumulator = 0
+put 200 gp2       ; reset pointer to start of array
+put 5   gp3       ; counter = 5 elements
+put 1   gp4       ; decrement value
+put .LOOP gp5
+put .DONE gp6
+
+noop .LOOP
+read gp2 gp7      ; gp7 = value at current address
+add gp0 gp7       ; accumulator += value
+copy ans gp0
+add gp2 gp1       ; advance pointer by 2 bytes
+copy ans gp2
+sub gp3 gp4       ; counter--
+copy ans gp3
+jump gp6 gp3      ; if counter == 0, jump to DONE
+jump gp5 zero     ; else keep looping
+
+; Display the sum on LCD0
+put 0 dvc         .DONE
+copy gp0 out
+
+halt
+
+; Study questions:
+; - Watch the memory pane. After Phase 1, can you see the values
+;   10, 20, 30, 40, 50 in the rows starting at address 200?
+; - What would you change to sum 10 elements instead of 5?

@@ -1,6 +1,15 @@
 use std::collections::VecDeque;
 
-#[derive(Debug)]
+/// Named device IDs. Source assembly programs still write the literal
+/// numbers (per the no-sugar decision in the planning doc), but Rust
+/// code — tests, the TUI, the device table itself — should reach for
+/// these constants instead of magic numbers. Future device stages
+/// (input, screen, disk) will add new entries here.
+pub const DVC_LCD0: u16 = 0;
+pub const DVC_LCD1: u16 = 1;
+pub const DVC_TTY:  u16 = 2;
+
+#[derive(Debug, PartialEq)]
 pub enum Error {
     Write(String),
     Read(String),

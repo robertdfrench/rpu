@@ -1,0 +1,27 @@
+# This example multiplies 6 * 7 and 12 * 12, displaying each
+# result on a different LCD.
+
+; --- First: 6 * 7 = 42 on LCD0 ---
+put 6 gp0
+put 7 gp1
+
+; The 'mul' instruction works just like 'add': it takes two
+; registers and stores the product in the 'ans' register.
+mul gp0 gp1
+
+put 0 dvc
+copy ans out
+
+; --- Second: 12 * 12 = 144 on LCD1 ---
+put 12 gp0
+put 12 gp1
+
+mul gp0 gp1
+
+put 1 dvc
+copy ans out
+
+halt
+
+; Bonus question: What is the largest product you can compute
+; before the CPU signals an overflow? (Hint: registers are 16 bits.)

@@ -1,0 +1,25 @@
+# This example writes the number 42 to memory, then reads it
+# back into a register and displays it on LCD0.
+
+; Put the value 42 into gp0. This is the data we'll store.
+put 42 gp0
+
+; Put the address 200 into gp1. This is where we'll store the
+; data. Address 200 is arbitrary -- it just needs to be past the
+; end of our program code, which lives at the start of memory.
+put 200 gp1
+
+; Write the value in gp0 to the address in gp1.
+; After this instruction, memory[200] and memory[201] hold the
+; two bytes of the number 42.
+write gp0 gp1
+
+; Now read the value back from the address in gp1 into gp2.
+; gp2 should now contain 42.
+read gp1 gp2
+
+; Display the value on LCD0.
+put 0 dvc
+copy gp2 out
+
+halt

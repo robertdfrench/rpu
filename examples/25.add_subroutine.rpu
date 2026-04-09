@@ -1,0 +1,83 @@
+# This program defines a subroutine called ADD_NUMS that adds two
+# numbers from the stack and pushes the result. The subroutine is
+# called twice with different arguments.
+#
+# Calling convention:
+#   1. Push the arguments onto the stack
+#   2. Push the return address
+#   3. Jump to the subroutine
+#   4. After return, pop the result
+#
+# This is the same pattern used in example 11 (DOUBLE), but
+# stripped down so you can see the mechanics clearly.
+
+; ============================================================
+; First call: ADD_NUMS(3, 4)
+; ============================================================
+
+; Push the arguments
+put 3 gp0
+push gp0
+put 4 gp1
+push gp1
+
+; Push return address and call
+put .RET1 gp2
+push gp2
+put .ADD_NUMS gp2
+jump gp2 zero
+
+; Return point: pop the result
+pop gp3            .RET1
+put 0 dvc
+copy gp3 out
+
+; ============================================================
+; Second call: ADD_NUMS(10, 20)
+; ============================================================
+
+put 10 gp0
+push gp0
+put 20 gp1
+push gp1
+
+put .RET2 gp2
+push gp2
+put .ADD_NUMS gp2
+jump gp2 zero
+
+pop gp3            .RET2
+put 1 dvc
+copy gp3 out
+
+halt
+
+; ============================================================
+; Subroutine: ADD_NUMS
+;   Pops the return address and two arguments from the stack.
+;   Adds them together and pushes the result.
+;   Then jumps back to the return address.
+; ============================================================
+
+; Pop return address
+pop gp2            .ADD_NUMS
+
+; Pop arguments (second was pushed last, so it comes out first)
+pop gp1
+pop gp0
+
+; Add them and push the result
+add gp0 gp1
+push ans
+
+; Return to caller
+jump gp2 zero
+
+; Study questions:
+; - Trace the stack carefully. After pushing 3, 4, and the
+;   return address, what does the stack look like? Draw it
+;   on paper.
+; - The subroutine pops arguments in REVERSE order (the second
+;   argument is popped first). Why?
+; - How would you change ADD_NUMS into a MULTIPLY_NUMS that
+;   returns the product instead of the sum?

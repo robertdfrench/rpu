@@ -1,0 +1,44 @@
+# This program computes 2 to the power of 10 (2^10 = 1024) by
+# repeated multiplication.
+
+; accumulator = 1 (the starting value for any product)
+put 1 gp0
+
+; base = 2
+put 2 gp1
+
+; counter = 10 (we will multiply 10 times)
+put 10 gp2
+
+; decrement = 1
+put 1 gp3
+
+put .LOOP gp4
+put .DONE gp5
+
+noop .LOOP
+; Multiply accumulator by base.
+mul gp0 gp1
+copy ans gp0
+
+; Decrement counter.
+sub gp2 gp3
+copy ans gp2
+
+; If counter == 0, we're done.
+jump gp5 gp2
+
+; Otherwise, loop.
+jump gp4 zero
+
+; Display the result on LCD0
+put 0 dvc         .DONE
+copy gp0 out
+
+halt
+
+; Study questions:
+; - What value would you get for 3^5? Change the base and
+;   counter to find out.
+; - What is the largest power of 2 that fits in a 16-bit
+;   register before overflow?
