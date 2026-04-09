@@ -153,9 +153,9 @@ now and extract on the second use.
 
 ### 3. A second smoke test: the memory pane only renders visible rows
 
-This is the test that pins down stage 1's perf fix. With 64 KiB of
-RAM, the memory pane should still only render `area.height`
-rows worth of memory data — *not* 8,192 rows.
+This is the test that pins down stage 1's perf fix. The memory pane
+should only render `area.height` rows worth of memory data,
+regardless of `RAM` size — *not* `RAM / 8` rows.
 
 You can't directly assert "only N rows were built" through the
 buffer (the buffer just shows what's drawn). But you *can* assert
@@ -164,7 +164,7 @@ expectations. A loose version:
 
 ```rust
 #[test]
-fn memory_pane_renders_with_full_64kib_ram() {
+fn memory_pane_scrolls_to_the_end() {
     let mut computer = Computer::new();
     computer.load_source("halt\n").unwrap();   // smallest valid program
 
@@ -172,13 +172,14 @@ fn memory_pane_renders_with_full_64kib_ram() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut ui = UiState::default();
 
-    // Scroll near the end of RAM.
-    ui.mem_scroll.offset = 60_000;
+    // Scroll to the last row of RAM.
+    ui.mem_selected_row = (rpu::core::RAM / 8) - 1;
     terminal.draw(|f| render(f, &computer, &mut ui)).unwrap();
 
     let rendered = buffer_to_string(terminal.backend().buffer());
-    // The address column should show numbers in the 60_000 range.
-    assert!(rendered.contains("60000") || rendered.contains("60008"));
+    // The address column should show the last row's start address.
+    let last_row_addr = rpu::core::RAM - 8;
+    assert!(rendered.contains(&last_row_addr.to_string()));
 }
 ```
 

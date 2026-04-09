@@ -41,8 +41,11 @@ Tackle these in order unless noted.
 These come up across multiple stages. Decide before starting the
 relevant stage; I've left a recommendation in each stage doc.
 
-- **Final RAM size.** Recommendation: 64 KiB (`u16::MAX as usize + 1`),
-  so every 16-bit register value is a valid address.
+- ~~**Final RAM size.**~~ **Resolved (stage 1):** 1 KiB. Tried 64 KiB
+  first, but even with constant-cost rendering, 8,192 rows is too many
+  to ever scroll through. 1 KiB is plenty for current examples and
+  navigation feels good. Programs that walk past the end get a clean
+  `AddressOutOfBounds` error.
 - **What `Device::read()` returning `None` means.** Recommendation: a
   new `rdy` flag register set after each `copy in <reg>`, so polling
   loops can branch on `jump WAIT rdy`.

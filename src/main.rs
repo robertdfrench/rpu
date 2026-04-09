@@ -90,14 +90,15 @@ fn run(
                     },
                     KeyCode::PageDown => {
                         let total_rows = RAM / MEMORY_BYTES_PER_ROW;
-                        if computer.memory_selected_row + 1 < total_rows {
-                            computer.memory_selected_row += 1;
-                        }
+                        let last = total_rows.saturating_sub(1);
+                        let jump = computer.memory_page_rows.max(1);
+                        computer.memory_selected_row =
+                            (computer.memory_selected_row + jump).min(last);
                     },
                     KeyCode::PageUp => {
-                        if computer.memory_selected_row > 0 {
-                            computer.memory_selected_row -= 1;
-                        }
+                        let jump = computer.memory_page_rows.max(1);
+                        computer.memory_selected_row =
+                            computer.memory_selected_row.saturating_sub(jump);
                     },
                     KeyCode::Char('n') => {
                         let mut devices: Vec<&mut dyn Device> = vec![
@@ -136,6 +137,10 @@ struct Computer {
     /// Drives both the highlight and the scroll position of the
     /// memory pane.
     memory_selected_row: usize,
+    /// How many memory rows fit in the pane on the most recent
+    /// frame. Set by `render_memory`, read by the PgUp/PgDn key
+    /// handlers so they can jump a full page at a time.
+    memory_page_rows: usize,
 }
 
 impl Computer {
@@ -147,6 +152,9 @@ impl Computer {
             lcd1: LCD::default(),
             code_list_state: ListState::default(),
             memory_selected_row: 0,
+            // Conservative default until the first render measures
+            // the actual pane.
+            memory_page_rows: 1,
         }
     }
 }
@@ -296,6 +304,7 @@ fn render(computer: &mut Computer, frame: &mut Frame) {
     render_memory(
         &computer.core.memory,
         computer.memory_selected_row,
+        &mut computer.memory_page_rows,
         layouts.memory,
         frame,
         "Memory"
@@ -500,6 +509,7 @@ fn render_registers(
 fn render_memory(
     memory: &[u8; RAM],
     selected_row: usize,
+    page_rows_out: &mut usize,
     area: Rect,
     frame: &mut Frame,
     title: &str,
@@ -515,6 +525,8 @@ fn render_memory(
 
     // Reserve: top border (1) + header (1) + blank (1) + bottom border (1).
     let visible_rows = (area.height as usize).saturating_sub(4);
+    // Report back to the key handlers so PgUp/PgDn can jump a page.
+    *page_rows_out = visible_rows.max(1);
     if visible_rows == 0 || total_rows == 0 {
         let paragraph = Paragraph::new("").block(common_block(title));
         frame.render_widget(paragraph, area);

@@ -154,7 +154,7 @@ impl Computer {
 
     pub fn run_to_halt(&mut self) -> Result<(), ExecutionError> {
         // Safety net: a runaway program shouldn't hang the test
-        // suite forever. 1M steps is generous for a 64KiB CPU.
+        // suite forever. 1M steps is generous for a 1 KiB CPU.
         const MAX_STEPS: usize = 1_000_000;
         for _ in 0..MAX_STEPS {
             if !self.is_running() { return Ok(()); }
@@ -195,7 +195,7 @@ impl Tty {
 
 `Lcd` probably already tracks `last` for rendering the 7-segment
 display. Add a `history: Vec<u16>` field that gets pushed in
-`write()`. It grows unbounded — fine for a 64KiB-RAM CPU; tests run
+`write()`. It grows unbounded — fine for a 1 KiB-RAM CPU; tests run
 short programs.
 
 (Buffer device from `devices.rs` already does this — it's literally

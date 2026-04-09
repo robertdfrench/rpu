@@ -7,7 +7,8 @@ the RAM" complaint. By now we have:
 
 - A perf-fixed memory pane that builds only the visible window
   (stage 1).
-- 64 KiB of RAM to navigate (stage 1).
+- 1 KiB of RAM — small enough that scrolling is a non-issue and
+  students can see the whole memory in a few page-downs (stage 1).
 - A headless `Computer` (stage 2) that gives `program: Option<Program>`
   a natural home.
 - A render function callable from tests (stage 3), so we can pin
@@ -229,8 +230,9 @@ For each sub-stage, add a render test against `TestBackend`:
 
 ## Done when
 
-- [ ] You can load any example, page through 64 KiB, and never lose
-      track of where the program / stack / current instruction are.
+- [ ] You can load any example, scan through all 1 KiB, and never
+      lose track of where the program / stack / current instruction
+      are.
 - [ ] You can jump to any address by name or number.
 - [ ] When you don't want to think about it, follow-PC mode just
       keeps the right thing on screen.
