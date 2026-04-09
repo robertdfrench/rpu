@@ -180,12 +180,42 @@ Two things worth noticing:
 ### 4. Device history accessors
 
 For tests to assert on what programs *did*, each device needs a way
-to report its history. Add minimal accessors:
+to report its history. The LCD overwrites on every write, so without
+a history field there's no way to test programs that print a
+sequence (countdown, fibonacci, 99 bottles — i.e. most of them).
 
 ```rust
+use std::collections::VecDeque;
+
+const LCD_HISTORY_CAP: usize = 1024;
+
+pub struct Lcd {
+    history: VecDeque<u16>,
+}
+
+impl Device for Lcd {
+    fn write(&mut self, value: u16) -> Result<(), Error> {
+        if self.history.len() == LCD_HISTORY_CAP {
+            self.history.pop_front();
+        }
+        self.history.push_back(value);
+        Ok(())
+    }
+    // ...
+}
+
 impl Lcd {
-    pub fn last_written(&self) -> Option<u16> { self.last }
-    pub fn history(&self) -> &[u16] { &self.history }
+    pub fn last_written(&self) -> Option<u16> {
+        self.history.back().copied()
+    }
+
+    /// Returns the recorded outputs in oldest-to-newest order. Caps
+    /// at the last `LCD_HISTORY_CAP` values; older entries fall off
+    /// the front. Cloned for ergonomic test asserts — the renderer
+    /// uses `last_written()` instead and never calls this.
+    pub fn history(&self) -> Vec<u16> {
+        self.history.iter().copied().collect()
+    }
 }
 
 impl Tty {
@@ -193,13 +223,22 @@ impl Tty {
 }
 ```
 
-`Lcd` probably already tracks `last` for rendering the 7-segment
-display. Add a `history: Vec<u16>` field that gets pushed in
-`write()`. It grows unbounded — fine for a 1 KiB-RAM CPU; tests run
-short programs.
+The cap is **1024** — same round number as `RAM`, way more than any
+realistic teaching program produces in a single run, and small
+enough that the worst-case `history()` clone is ~2 KiB.
 
-(Buffer device from `devices.rs` already does this — it's literally
-just `Vec<u16>`. The `Lcd` accessors are the new code.)
+Test usage stays clean:
+
+```rust
+assert_eq!(c.devices.lcd0.history(), vec![5, 4, 3, 2, 1]);
+```
+
+The renderer reads `last_written()` for the 7-segment display and
+doesn't touch `history()` at all, so the per-call clone is paid only
+by tests.
+
+(`Buffer` device from `devices.rs` is unchanged — it's a different
+shape, used as a generic `Device` impl in tests.)
 
 ### 5. Rewrite the existing `core.rs` tests to use `Computer`
 
@@ -300,19 +339,21 @@ pub use programs::Program;
 This is what makes `tests/cpu.rs` work — integration tests only see
 `pub` items.
 
-## Open questions
+## Resolved decisions
 
-- **Should `Lcd::history` be capped?** I'd say no for now (tests run
-  short programs), but if a TUI demo runs for hours and you start
-  noticing memory growth, cap it at the last N values.
-- **Should `Program` retain its symbol table?** This stage doesn't
-  require it, but stages 5 (jump-to-label in the RAM navigator) and
-  3 (label-aware decoded sidebar) both want it. Cheap to add now —
-  one `pub labels: HashMap<String, u16>` field on `Program`. Doing
-  it in this stage means it's available when those stages need it.
-- **Where does `Computer` live?** New file `src/computer.rs` is
-  cleanest. Adding it to `lib.rs` directly works too but `lib.rs`
-  starts to feel like a junk drawer.
+- **`Lcd::history` is a 1024-entry ring buffer.** Backed by
+  `VecDeque<u16>`; `write()` pops from the front when the cap is
+  reached. 1024 mirrors `RAM` and is far more than any teaching
+  program emits in a single run. `history()` clones to a `Vec<u16>`
+  for test ergonomics; the renderer uses `last_written()` and
+  doesn't pay that cost.
+- **`Program` retains its symbol table.** Add a
+  `pub labels: HashMap<String, u16>` field on `Program` and
+  populate it during compile. Stage 2 doesn't strictly need it,
+  but stages 3 (label-aware decoded sidebar) and 5 (jump-to-label
+  in the RAM navigator) both do, and it's a one-line cost now.
+- **`Computer` lives in `src/computer.rs`.** New file. Keeps
+  `lib.rs` from turning into a junk drawer.
 
 ## Test plan
 

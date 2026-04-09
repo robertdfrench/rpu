@@ -1,9 +1,7 @@
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
-use rpu::core::       Core;
 use ratatui::layout:: Constraint;
 use ratatui::         DefaultTerminal;
-use rpu::devices::    Device;
 use ratatui::layout:: Direction;
 use crossterm::event::Event;
 use crossterm::event::KeyCode;
@@ -17,6 +15,9 @@ use clap::            Parser;
 use std::path::       PathBuf;
 use rpu::programs::   Program;
 use rpu::core::       RAM;
+use rpu::             Computer;
+use rpu::             Lcd;
+use rpu::             Tty;
 use ratatui::layout:: Rect;
 use color_eyre::      Result;
 use ratatui::widgets::Row;
@@ -24,7 +25,6 @@ use ratatui::text::   Span;
 use ratatui::style::  Style;
 use ratatui::style::  Stylize;
 use ratatui::widgets::Table;
-use rpu::             devices;
 use crossterm::       event;
 use std::             fs;
 
@@ -41,27 +41,55 @@ pub fn main() -> Result<()> {
     let args = Args::parse();
 
     let source = fs::read_to_string(&args.source)?;
-    let mut core = Core::new();
-    let program = Program::try_compile(&source).unwrap();
-    core.load_program(&program).unwrap();
-
+    let mut computer = Computer::new();
+    computer.load_source(&source).unwrap();
 
     color_eyre::install()?;
     let terminal = ratatui::init();
-    let computer = Computer::new(core, program);
-    let result = run(terminal, computer);
+    let app = App::new(computer);
+    let result = run(terminal, app);
     ratatui::restore();
     result
 }
 
+/// TUI-side state that wraps a headless `Computer` and adds the
+/// view state the renderer needs (which line in the code pane is
+/// selected, where the memory pane is scrolled, etc.). Stage 3 will
+/// pull the view state out into a dedicated `UiState` so `render`
+/// can be called from tests against a `TestBackend`.
+struct App {
+    computer: Computer,
+    code_list_state: ListState,
+    /// Index of the highlighted memory row, in 8-byte rows. Drives
+    /// both the highlight and the scroll position of the memory pane.
+    memory_selected_row: usize,
+    /// How many memory rows fit in the pane on the most recent
+    /// frame. Set by `render_memory`, read by the PgUp/PgDn key
+    /// handlers so they can jump a full page at a time.
+    memory_page_rows: usize,
+}
+
+impl App {
+    fn new(computer: Computer) -> Self {
+        Self {
+            computer,
+            code_list_state: ListState::default(),
+            memory_selected_row: 0,
+            // Conservative default until the first render measures
+            // the actual pane.
+            memory_page_rows: 1,
+        }
+    }
+}
+
 fn run(
     mut terminal: DefaultTerminal,
-    mut computer: Computer,
+    mut app: App,
 ) -> Result<()> {
     loop {
-        terminal.draw(|f| { render(&mut computer,f); })?;
+        terminal.draw(|f| { render(&mut app, f); })?;
         match event::read()? {
-            Event::Key(ke) => {  
+            Event::Key(ke) => {
                 match ke.code {
                     KeyCode::Esc => {
                         break Ok(())
@@ -70,51 +98,34 @@ fn run(
                         break Ok(())
                     },
                     KeyCode::Down => {
-                        let new = computer.code_list_state
-                            .offset() + 1;
-                        let current = computer.code_list_state
-                            .offset_mut();
+                        let new = app.code_list_state.offset() + 1;
+                        let current = app.code_list_state.offset_mut();
                         *current = new;
                     },
                     KeyCode::Up => {
-                        let old = computer.code_list_state
-                            .offset();
-                        let new = if old == 0 {
-                            0
-                        } else {
-                            old - 1
-                        };
-                        let current = computer.code_list_state
-                            .offset_mut();
+                        let old = app.code_list_state.offset();
+                        let new = if old == 0 { 0 } else { old - 1 };
+                        let current = app.code_list_state.offset_mut();
                         *current = new;
                     },
                     KeyCode::PageDown => {
                         let total_rows = RAM / MEMORY_BYTES_PER_ROW;
                         let last = total_rows.saturating_sub(1);
-                        let jump = computer.memory_page_rows.max(1);
-                        computer.memory_selected_row =
-                            (computer.memory_selected_row + jump).min(last);
+                        let jump = app.memory_page_rows.max(1);
+                        app.memory_selected_row =
+                            (app.memory_selected_row + jump).min(last);
                     },
                     KeyCode::PageUp => {
-                        let jump = computer.memory_page_rows.max(1);
-                        computer.memory_selected_row =
-                            computer.memory_selected_row.saturating_sub(jump);
+                        let jump = app.memory_page_rows.max(1);
+                        app.memory_selected_row =
+                            app.memory_selected_row.saturating_sub(jump);
                     },
                     KeyCode::Char('n') => {
-                        let mut devices: Vec<&mut dyn Device> = vec![
-                            &mut computer.lcd0,
-                            &mut computer.lcd1,
-                        ];
-                        let r = computer.core
-                            .execute_single_instruction(
-                                &mut devices
-                            );
-                        match r {
-                            Ok(false) => { continue; },
-                            Ok(true) => { break Ok(()) },
+                        match app.computer.step() {
+                            Ok(()) => { continue; },
                             Err(e) => {
-                                computer.core.tty +=
-                                    &format!("{:?}\n", e);
+                                app.computer.devices.tty
+                                    .push_line(&format!("{:?}", e));
                                 continue;
                             }
                         }
@@ -123,38 +134,6 @@ fn run(
                 }
             },
             _ => {}
-        }
-    }
-}
-
-struct Computer {
-    core: Core,
-    program: Program,
-    lcd0: LCD,
-    lcd1: LCD,
-    code_list_state: ListState,
-    /// Index of the highlighted memory row, in 8-byte rows.
-    /// Drives both the highlight and the scroll position of the
-    /// memory pane.
-    memory_selected_row: usize,
-    /// How many memory rows fit in the pane on the most recent
-    /// frame. Set by `render_memory`, read by the PgUp/PgDn key
-    /// handlers so they can jump a full page at a time.
-    memory_page_rows: usize,
-}
-
-impl Computer {
-    fn new(core: Core, program: Program) -> Self {
-        Self {
-            core,
-            program,
-            lcd0: LCD::default(),
-            lcd1: LCD::default(),
-            code_list_state: ListState::default(),
-            memory_selected_row: 0,
-            // Conservative default until the first render measures
-            // the actual pane.
-            memory_page_rows: 1,
         }
     }
 }
@@ -224,7 +203,7 @@ impl Layouts {
             lcd0,
             lcd1,
             memory,
-            registers, 
+            registers,
             special_registers,
             printer,
             power_led,
@@ -232,65 +211,70 @@ impl Layouts {
     }
 }
 
-fn render(computer: &mut Computer, frame: &mut Frame) {
+fn render(app: &mut App, frame: &mut Frame) {
     let layouts = Layouts::new(frame);
 
+    // The TUI always has a program loaded by the time render() is
+    // called — `main()` loads one before constructing `App`.
+    let program = app.computer.program.as_ref()
+        .expect("render called before a program was loaded");
 
     render_code(
-        &computer.program,
-        computer.core.register_file.pc,
-        &mut computer.code_list_state,
+        program,
+        app.computer.core.register_file.pc,
+        &mut app.code_list_state,
         layouts.code,
         frame,
         "Code"
     );
     render_help(layouts.help, frame, "Help");
-    computer.lcd0.render(
+    render_lcd(
+        &app.computer.devices.lcd0,
         layouts.lcd0,
         frame,
         "LCD0 (dvc 0)"
     );
-    computer.lcd1.render(
+    render_lcd(
+        &app.computer.devices.lcd1,
         layouts.lcd1,
         frame,
         "LCD1 (dvc 1)"
     );
     render_led(
-        computer.core.power,
+        app.computer.core.power,
         layouts.power_led,
         frame,
         "Power"
     );
     render_printer(
-        &computer.core.tty,
+        &app.computer.devices.tty,
         layouts.printer,
         frame,
         "Error Console"
     );
 
     let gp_registers = vec![
-        ("gp0", computer.core.register_file.gp0),
-        ("gp1", computer.core.register_file.gp1),
-        ("gp2", computer.core.register_file.gp2),
-        ("gp3", computer.core.register_file.gp3),
-        ("gp4", computer.core.register_file.gp4),
-        ("gp5", computer.core.register_file.gp5),
-        ("gp6", computer.core.register_file.gp6),
-        ("gp7", computer.core.register_file.gp7),
+        ("gp0", app.computer.core.register_file.gp0),
+        ("gp1", app.computer.core.register_file.gp1),
+        ("gp2", app.computer.core.register_file.gp2),
+        ("gp3", app.computer.core.register_file.gp3),
+        ("gp4", app.computer.core.register_file.gp4),
+        ("gp5", app.computer.core.register_file.gp5),
+        ("gp6", app.computer.core.register_file.gp6),
+        ("gp7", app.computer.core.register_file.gp7),
     ];
     render_registers(
         gp_registers,
-        layouts.registers, 
+        layouts.registers,
         frame,
         "General Purpose Registers"
     );
 
-
     let sp_registers = vec![
-        ("ans", computer.core.register_file.ans),
-        ("dvc", computer.core.register_file.dvc),
-        ("pc", computer.core.register_file.pc),
-        ("sp", computer.core.register_file.sp),
+        ("ans", app.computer.core.register_file.ans),
+        ("dvc", app.computer.core.register_file.dvc),
+        ("pc",  app.computer.core.register_file.pc),
+        ("sp",  app.computer.core.register_file.sp),
     ];
     render_registers(
         sp_registers,
@@ -299,12 +283,11 @@ fn render(computer: &mut Computer, frame: &mut Frame) {
         "Special Purpose Registers"
     );
 
-
     // Memory
     render_memory(
-        &computer.core.memory,
-        computer.memory_selected_row,
-        &mut computer.memory_page_rows,
+        &app.computer.core.memory,
+        app.memory_selected_row,
+        &mut app.memory_page_rows,
         layouts.memory,
         frame,
         "Memory"
@@ -315,7 +298,7 @@ fn render_code(
     program: &Program,
     pc: u16,
     state: &mut ListState,
-    area: Rect, 
+    area: Rect,
     frame: &mut Frame,
     title: &str,
 ) {
@@ -399,83 +382,62 @@ fn render_led(
     frame.render_widget(paragraph, area);
 }
 
-#[derive(Default)]
-struct LCD {
-    value: u16
-}
-
-impl devices::Device for LCD {
-    fn write(&mut self, value: u16)
-        -> Result<(), devices::Error>
-    {
-        self.value = value;
-        Ok(())
-    }
-
-    fn read(&mut self)
-        -> Result<Option<u16>, devices::Error>
-    {
-        Err(devices::Error::Read(
-            String::from("The LCD isn't an input")
-        ))
-    }
-}
-
-impl LCD {
-    fn render(
-        &self,
-        area: Rect,
-        frame: &mut Frame,
-        title: &str
-    ) {
-        let font_definition = include_str!("../lcd_font.txt");
-        let mut lcd_font: Vec<Vec<&str>> = vec![];
-        let mut current_lcd_char: Vec<&str> = vec![];
-        for (n, text) in font_definition.lines().enumerate() {
-            current_lcd_char.push(text);
-            if ((n + 1) % 5) == 0 {
-                lcd_font.push(current_lcd_char);
-                current_lcd_char = vec![];
-            }
+/// Renders an `Lcd` device as a 5-row 7-segment display showing the
+/// most recently written value, zero-padded to 5 digits. Reads only
+/// `lcd.last_written()`; the full history is the test interface, not
+/// the render interface.
+fn render_lcd(
+    lcd: &Lcd,
+    area: Rect,
+    frame: &mut Frame,
+    title: &str,
+) {
+    let font_definition = include_str!("../lcd_font.txt");
+    let mut lcd_font: Vec<Vec<&str>> = vec![];
+    let mut current_lcd_char: Vec<&str> = vec![];
+    for (n, text) in font_definition.lines().enumerate() {
+        current_lcd_char.push(text);
+        if ((n + 1) % 5) == 0 {
+            lcd_font.push(current_lcd_char);
+            current_lcd_char = vec![];
         }
-
-        let value = format!("{:0>5}", self.value);
-        let mut content = String::new();
-        for row in 0..5 {
-            for c in value.chars() {
-                let char_id = match c {
-                    '0' => 0,
-                    '1' => 1,
-                    '2' => 2,
-                    '3' => 3,
-                    '4' => 4,
-                    '5' => 5,
-                    '6' => 6,
-                    '7' => 7,
-                    '8' => 8,
-                    '9' => 9,
-                    _ => panic!()
-                };
-
-                content.push_str(lcd_font[char_id][row]);
-            }
-            content.push_str("\n");
-        }
-
-        let paragraph = Paragraph::new(content)
-            .block(common_block(title));
-        frame.render_widget(paragraph, area);
     }
-}
 
+    let value = format!("{:0>5}", lcd.last_written().unwrap_or(0));
+    let mut content = String::new();
+    for row in 0..5 {
+        for c in value.chars() {
+            let char_id = match c {
+                '0' => 0,
+                '1' => 1,
+                '2' => 2,
+                '3' => 3,
+                '4' => 4,
+                '5' => 5,
+                '6' => 6,
+                '7' => 7,
+                '8' => 8,
+                '9' => 9,
+                _ => panic!()
+            };
+
+            content.push_str(lcd_font[char_id][row]);
+        }
+        content.push_str("\n");
+    }
+
+    let paragraph = Paragraph::new(content)
+        .block(common_block(title));
+    frame.render_widget(paragraph, area);
+}
 
 fn render_printer(
-    text: &str,
+    tty: &Tty,
     area: Rect,
     frame: &mut Frame,
     title: &str
 ) {
-    let paragraph = Paragraph::new(text.to_string())
+    let paragraph = Paragraph::new(tty.contents().to_string())
         .block(common_block(title));
     frame.render_widget(paragraph, area);
 }
@@ -577,7 +539,7 @@ fn render_memory(
     frame.render_widget(paragraph, area);
 }
 
-fn common_block(title: &str) -> Block {
+fn common_block(title: &str) -> Block<'_> {
     let title = format!("[{title}]");
     Block::new()
         .title(title)

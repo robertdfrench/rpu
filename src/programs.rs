@@ -8,6 +8,10 @@ pub struct Program {
     instructions: Vec<Instruction>,
     pub source_lines: Vec<String>,
     pub source_addrs: HashMap<u16, usize>,
+    /// Label name (with leading `.`) to byte address. Populated
+    /// during compile so the TUI can resolve labels for jump-to and
+    /// the decoded sidebar in stage 5.
+    pub labels: HashMap<String, u16>,
 }
 
 fn skippable(line: &str) -> bool {
@@ -40,11 +44,11 @@ impl Program {
         let mut instructions = vec![];
         let mut source_lines = vec![];
         let mut source_addrs = HashMap::new();
-        let mut labels = HashMap::<String,usize>::new();
+        let mut labels = HashMap::<String, u16>::new();
 
         const WIDTH: usize = size_of::<Instruction>();
 
-        let mut estimated_address = 0;
+        let mut estimated_address: u16 = 0;
         for line in source.lines() {
             if skippable(line) { continue; }
 
@@ -58,7 +62,7 @@ impl Program {
                     );
                 }
             }
-            estimated_address += WIDTH;
+            estimated_address += WIDTH as u16;
         }
 
         for (n, line) in source.lines().enumerate() {
@@ -81,7 +85,7 @@ impl Program {
             source_addrs.insert(address as u16, n);
         }
 
-        Ok(Self{ instructions, source_lines, source_addrs })
+        Ok(Self{ instructions, source_lines, source_addrs, labels })
     }
 
     pub fn size(&self) -> usize {
