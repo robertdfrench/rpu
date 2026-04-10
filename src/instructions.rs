@@ -1,6 +1,5 @@
 use crate::registers::RegisterName;
 use crate::registers;
-use std::num::ParseIntError;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq)]
@@ -57,15 +56,37 @@ pub enum ParseError {
     InvalidInt(String),
 }
 
-impl From<registers::ParseError> for ParseError {
-    fn from(other: registers::ParseError) -> Self {
-        Self::RegisterParseError(other)
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseError::NoSuchInstruction(name) => {
+                write!(f, "no such instruction `{name}`")
+            }
+            ParseError::RegisterParseError(e) => write!(f, "{e}"),
+            ParseError::InvalidInt(token) => {
+                write!(f, "`{token}` is not a valid integer")
+            }
+        }
     }
 }
 
-impl From<ParseIntError> for ParseError {
-    fn from(other: ParseIntError) -> Self {
-        Self::InvalidInt(other.to_string())
+impl ParseError {
+    /// The token text that caused the error, so the compiler can
+    /// locate it in the original source line for span reporting.
+    pub fn offending_token(&self) -> &str {
+        match self {
+            ParseError::NoSuchInstruction(s) => s,
+            ParseError::RegisterParseError(
+                registers::ParseError::NoSuchRegisterName(s)
+            ) => s,
+            ParseError::InvalidInt(s) => s,
+        }
+    }
+}
+
+impl From<registers::ParseError> for ParseError {
+    fn from(other: registers::ParseError) -> Self {
+        Self::RegisterParseError(other)
     }
 }
 
@@ -119,7 +140,9 @@ impl Instruction {
                 Ok(Instruction::push(src))
             },
             "put" => {
-                let val: u16 = p[1].parse()?;
+                let val: u16 = p[1].parse().map_err(|_| {
+                    ParseError::InvalidInt(p[1].to_string())
+                })?;
                 let dst = RegisterName::try_parse(p[2])?;
                 Ok(Instruction::put(val, dst))
             },

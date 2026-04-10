@@ -90,6 +90,17 @@ pub enum BootError {
     Compilation(programs::CompilationError)
 }
 
+impl std::fmt::Display for BootError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BootError::ProgramTooBig(size) => {
+                write!(f, "program too big ({size} bytes, max {RAM})")
+            }
+            BootError::Compilation(e) => write!(f, "{e}"),
+        }
+    }
+}
+
 impl From<programs::CompilationError> for BootError {
     fn from(other: programs::CompilationError) -> Self {
         Self::Compilation(other)

@@ -84,7 +84,13 @@ impl Computer {
     /// first frame would highlight every program byte as "just
     /// changed", which is the wrong story.
     pub fn load_source(&mut self, src: &str) -> Result<(), BootError> {
-        let program = Program::try_compile(src)?;
+        self.load_source_named("<source>", src)
+    }
+
+    pub fn load_source_named(&mut self, name: &str, src: &str)
+        -> Result<(), BootError>
+    {
+        let program = Program::try_compile_named(name, src)?;
         self.core.load_program(&program)?;
         self.program = Some(program);
         self.last_step_memory = self.core.memory;

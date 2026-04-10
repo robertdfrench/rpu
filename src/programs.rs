@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::mem::size_of;
 
+use miette::{Diagnostic, NamedSource, SourceSpan};
+
 use crate::instructions::Instruction;
 use crate::instructions;
 
@@ -15,7 +17,7 @@ pub struct Program {
 }
 
 fn skippable(line: &str) -> bool {
-    line.starts_with("#") 
+    line.starts_with("#")
         || line.starts_with(";")
         || line.len() == 0
 }
@@ -26,21 +28,58 @@ fn tokenize(line: &str) -> Vec<String> {
         .collect()
 }
 
+#[derive(Debug, Diagnostic)]
+#[diagnostic()]
+pub struct CompilationError {
+    #[source_code]
+    src: NamedSource<String>,
+
+    #[label("{kind}")]
+    bad: SourceSpan,
+
+    kind: CompilationErrorKind,
+}
+
+impl std::fmt::Display for CompilationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
+impl std::error::Error for CompilationError {}
+
 #[derive(Debug)]
-pub enum CompilationError {
+pub enum CompilationErrorKind {
     InstructionParseError(instructions::ParseError),
     UndefinedLabel(String),
 }
 
-
-impl From<instructions::ParseError> for CompilationError {
-    fn from(other: instructions::ParseError) -> Self {
-        Self::InstructionParseError(other)
+impl std::fmt::Display for CompilationErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CompilationErrorKind::InstructionParseError(e) => write!(f, "{e}"),
+            CompilationErrorKind::UndefinedLabel(label) => {
+                write!(f, "undefined label `{label}`")
+            }
+        }
     }
+}
+
+/// Find the byte offset of `token` within `line`, searching from the
+/// start. Returns 0 if not found (defensive fallback so the span
+/// still points at the line start rather than panicking).
+fn token_offset(line: &str, token: &str) -> usize {
+    line.find(token).unwrap_or(0)
 }
 
 impl Program {
     pub fn try_compile(source: &str) -> Result<Self, CompilationError> {
+        Self::try_compile_named("<source>", source)
+    }
+
+    pub fn try_compile_named(name: &str, source: &str)
+        -> Result<Self, CompilationError>
+    {
         let mut instructions = vec![];
         let mut source_lines = vec![];
         let mut source_addrs = HashMap::new();
@@ -65,24 +104,54 @@ impl Program {
             estimated_address += WIDTH as u16;
         }
 
+        let src_base = source.as_ptr() as usize;
+        let make_src = || NamedSource::new(name, source.to_string());
+
         for (n, line) in source.lines().enumerate() {
             let address = instructions.len() * WIDTH;
             source_lines.push(line.to_string());
             if skippable(line) { continue; }
 
+            let line_offset = line.as_ptr() as usize - src_base;
+
             let mut tokens = tokenize(line);
             for token in tokens.iter_mut() {
                 if token.starts_with(".") {
-                    let address = labels.get(token).ok_or(
-                        CompilationError::UndefinedLabel(token.to_string())
-                    )?;
-                    *token = format!("{address}");
+                    let resolved = labels.get(token.as_str());
+                    match resolved {
+                        Some(addr) => *token = format!("{addr}"),
+                        None => {
+                            let off = line_offset + token_offset(line, token);
+                            return Err(CompilationError {
+                                src: make_src(),
+                                bad: SourceSpan::from((off, token.len())),
+                                kind: CompilationErrorKind::UndefinedLabel(
+                                    token.to_string()
+                                ),
+                            });
+                        }
+                    }
                 }
             }
-            let line = tokens.join(" ");
-            let instruction = Instruction::try_from_str(&line)?;
-            instructions.push(instruction);
-            source_addrs.insert(address as u16, n);
+            let joined = tokens.join(" ");
+            match Instruction::try_from_str(&joined) {
+                Ok(instr) => {
+                    instructions.push(instr);
+                    source_addrs.insert(address as u16, n);
+                }
+                Err(parse_err) => {
+                    let bad_token = parse_err.offending_token();
+                    let off = line_offset
+                        + token_offset(line, bad_token);
+                    return Err(CompilationError {
+                        src: make_src(),
+                        bad: SourceSpan::from((off, bad_token.len())),
+                        kind: CompilationErrorKind::InstructionParseError(
+                            parse_err
+                        ),
+                    });
+                }
+            }
         }
 
         Ok(Self{ instructions, source_lines, source_addrs, labels })

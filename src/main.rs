@@ -5,7 +5,7 @@ use clap::Parser;
 use std::path::PathBuf;
 use rpu::core::RAM;
 use rpu::tui::MEMORY_BYTES_PER_ROW;
-use rpu::{render, Computer, UiState};
+use rpu::{render, Computer, BootError, UiState};
 use color_eyre::Result;
 use crossterm::event;
 use std::fs;
@@ -21,8 +21,19 @@ pub fn main() -> Result<()> {
     let args = Args::parse();
 
     let source = fs::read_to_string(&args.source)?;
+    let filename = args.source.display().to_string();
     let mut computer = Computer::new();
-    computer.load_source(&source).unwrap();
+    match computer.load_source_named(&filename, &source) {
+        Ok(()) => {}
+        Err(BootError::Compilation(e)) => {
+            eprintln!("{:?}", miette::Report::new(e));
+            std::process::exit(1);
+        }
+        Err(BootError::ProgramTooBig(size)) => {
+            eprintln!("error: program too big ({size} bytes, max {})", RAM);
+            std::process::exit(1);
+        }
+    }
 
     color_eyre::install()?;
     let terminal = ratatui::init();

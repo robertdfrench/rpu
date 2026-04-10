@@ -8,5 +8,6 @@ anyhow = "1.0.97"
 clap = { version = "4.5.37", features = ["derive"] }
 color-eyre = "0.6.3"
 crossterm = "0.29.0"
+miette = { version = "7.6.0", features = ["fancy"] }
 ratatui = "0.29.0"
 thiserror = "2.0.12"

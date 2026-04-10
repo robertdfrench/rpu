@@ -132,6 +132,16 @@ pub enum ParseError {
     NoSuchRegisterName(String)
 }
 
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseError::NoSuchRegisterName(name) => {
+                write!(f, "no such register `{name}`")
+            }
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum DecodeError {
     NoSuchRegisterID(u8)
