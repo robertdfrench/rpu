@@ -1,6 +1,6 @@
 use crate::core::RAM;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
 pub struct RegisterFile {
     pub gp0: u16,

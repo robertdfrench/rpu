@@ -7,6 +7,7 @@
 use crate::core::{Core, BootError, ExecutionError, RAM};
 use crate::devices::{Device, Lcd, Tty};
 use crate::programs::Program;
+use crate::registers::RegisterFile;
 
 /// Maximum number of instructions `Computer::run_to_halt` will
 /// execute before giving up. Generous enough for any realistic
@@ -63,17 +64,32 @@ pub struct Computer {
     /// `load_source` so freshly loaded program bytes don't all show
     /// up as "just changed" on the first frame.
     last_step_memory: [u8; RAM],
+
+    /// Snapshot of `core.register_file` taken at the *start* of the
+    /// most recent `step()`. Same role as `last_step_memory` but for
+    /// registers — lets the TUI flash register cells whose value
+    /// just changed. Re-synced inside `load_source` alongside the
+    /// memory snapshot.
+    pub last_step_registers: RegisterFile,
 }
 
 impl Computer {
     pub fn new() -> Self {
+        let core = Core::new();
+        // Snapshot the freshly initialized register file so
+        // `register_changed` reports false for every register until
+        // something actually changes. The initial `sp` is non-zero,
+        // so a zero-init snapshot would wrongly flag sp as "changed"
+        // on the first frame.
+        let last_step_registers = core.register_file;
         Self {
-            core: Core::new(),
+            core,
             devices: Devices::new(),
             program: None,
             // Both buffers start as all zeros, so byte_changed returns
             // false for every address until something actually changes.
             last_step_memory: [0; RAM],
+            last_step_registers,
         }
     }
 
@@ -94,6 +110,7 @@ impl Computer {
         self.core.load_program(&program)?;
         self.program = Some(program);
         self.last_step_memory = self.core.memory;
+        self.last_step_registers = self.core.register_file;
         Ok(())
     }
 
@@ -113,6 +130,7 @@ impl Computer {
     /// shows).
     pub fn step(&mut self) -> Result<(), ExecutionError> {
         self.last_step_memory = self.core.memory;
+        self.last_step_registers = self.core.register_file;
         let mut slice = self.devices.as_slice();
         self.core.execute_single_instruction(&mut slice)?;
         Ok(())

@@ -8,6 +8,7 @@
 
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
+use ratatui::widgets::Clear;
 use ratatui::layout:: Constraint;
 use ratatui::layout:: Direction;
 use ratatui::         Frame;
@@ -66,6 +67,13 @@ pub struct UiState {
     /// they can jump a full page at a time. Starts at 0; the first
     /// frame populates it before any key event can fire.
     pub memory_page_rows: usize,
+
+    /// If `Some`, a modal error message to overlay on top of the
+    /// normal TUI. Set when a reload (`r`) fails to compile or the
+    /// file can't be read; cleared by the next key press. The
+    /// underlying `Computer` keeps running normally behind the popup
+    /// — the old program stays loaded until a reload succeeds.
+    pub error_popup: Option<String>,
 }
 
 /// Pre-computed rectangles for every pane in the TUI. Built fresh on
@@ -99,13 +107,13 @@ impl Layouts {
             ])
             .split(frame.area());
 
-        // Left strip: code list fills, with a 4-row help block pinned
+        // Left strip: code list fills, with a 5-row help block pinned
         // to the bottom.
         let lefthand_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![
                 Constraint::Fill(1),
-                Constraint::Length(4)
+                Constraint::Length(5)
             ])
             .split(layout[0]);
         let code = lefthand_layout[0];
@@ -209,15 +217,21 @@ pub fn render(
         "TTY (dvc 2)"
     );
 
+    // Flag each register as "just changed" by comparing the live
+    // value to the pre-step snapshot on `computer`. The renderer
+    // styles changed cells the same way changed memory bytes are
+    // styled (white-on-blue bold), so the visual story is uniform.
+    let rf = &computer.core.register_file;
+    let pr = &computer.last_step_registers;
     let gp_registers = vec![
-        ("gp0", computer.core.register_file.gp0),
-        ("gp1", computer.core.register_file.gp1),
-        ("gp2", computer.core.register_file.gp2),
-        ("gp3", computer.core.register_file.gp3),
-        ("gp4", computer.core.register_file.gp4),
-        ("gp5", computer.core.register_file.gp5),
-        ("gp6", computer.core.register_file.gp6),
-        ("gp7", computer.core.register_file.gp7),
+        ("gp0", rf.gp0, rf.gp0 != pr.gp0),
+        ("gp1", rf.gp1, rf.gp1 != pr.gp1),
+        ("gp2", rf.gp2, rf.gp2 != pr.gp2),
+        ("gp3", rf.gp3, rf.gp3 != pr.gp3),
+        ("gp4", rf.gp4, rf.gp4 != pr.gp4),
+        ("gp5", rf.gp5, rf.gp5 != pr.gp5),
+        ("gp6", rf.gp6, rf.gp6 != pr.gp6),
+        ("gp7", rf.gp7, rf.gp7 != pr.gp7),
     ];
     render_registers(
         gp_registers,
@@ -227,10 +241,10 @@ pub fn render(
     );
 
     let sp_registers = vec![
-        ("ans", computer.core.register_file.ans),
-        ("dvc", computer.core.register_file.dvc),
-        ("pc",  computer.core.register_file.pc),
-        ("sp",  computer.core.register_file.sp),
+        ("ans", rf.ans, rf.ans != pr.ans),
+        ("dvc", rf.dvc, rf.dvc != pr.dvc),
+        ("pc",  rf.pc,  rf.pc  != pr.pc),
+        ("sp",  rf.sp,  rf.sp  != pr.sp),
     ];
     render_registers(
         sp_registers,
@@ -247,6 +261,40 @@ pub fn render(
         frame,
         "Memory"
     );
+
+    if let Some(msg) = &ui.error_popup {
+        render_error_popup(msg, frame);
+    }
+}
+
+/// Draws a centered modal error popup over the whole frame. Used
+/// for reload failures (compile errors, file I/O) — the underlying
+/// TUI is still rendered behind it so the user doesn't lose their
+/// place, but a `Clear` widget wipes the popup area so text
+/// underneath doesn't bleed through. Dismissed by the next key
+/// press; dismissal logic lives in `main.rs`.
+fn render_error_popup(msg: &str, frame: &mut Frame) {
+    let area = frame.area();
+    // Target ~70% wide × 60% tall, but cap so tiny terminals still
+    // get a usable popup.
+    let w = (area.width as u32 * 7 / 10).max(30).min(area.width as u32) as u16;
+    let h = (area.height as u32 * 6 / 10).max(8).min(area.height as u32) as u16;
+    let x = area.x + (area.width - w) / 2;
+    let y = area.y + (area.height - h) / 2;
+    let popup = Rect { x, y, width: w, height: h };
+
+    let block = Block::new()
+        .title("[Reload failed]")
+        .borders(Borders::ALL)
+        .border_style(Style::new().red().bold());
+    let footer = "\n\n(press any key to dismiss)";
+    let body = format!("{msg}{footer}");
+    let paragraph = Paragraph::new(body)
+        .block(block)
+        .style(Style::new().red());
+
+    frame.render_widget(Clear, popup);
+    frame.render_widget(paragraph, popup);
 }
 
 /// Coarse classification of a memory address into the kind of thing
@@ -363,9 +411,16 @@ fn render_help(
             Span::raw(" - scroll mem window")
         ])
     ];
+    let text_r = vec![
+        Line::from(vec![
+            Span::styled("r", Style::new().bold()),
+            Span::raw(" - reload source file")
+        ])
+    ];
     let rows = [
         Row::new([text_n, text_q]),
-        Row::new([text_up, text_pgup])
+        Row::new([text_up, text_pgup]),
+        Row::new([text_r, vec![]]),
     ];
     let widths = vec![
         Constraint::Length(28), Constraint::Length(31)
@@ -477,24 +532,33 @@ fn render_printer(
     frame.render_widget(paragraph, area);
 }
 
-/// Draws a row of `(name, value)` register cells with bold name
-/// headers above them. Used for both the GP register row and the
-/// special-purpose register row — same shape, different inputs.
+/// Draws a row of `(name, value, changed)` register cells with
+/// bold name headers above them. Used for both the GP register row
+/// and the special-purpose register row — same shape, different
+/// inputs. Cells where `changed` is true get the same white-on-blue
+/// flash style as changed memory bytes, so "what just moved" is
+/// visually consistent across the two panes.
 fn render_registers(
-    pairs: Vec<(&str, u16)>,
+    cols: Vec<(&str, u16, bool)>,
     area: Rect,
     frame: &mut Frame,
     title: &str
 ) {
-    let cells: Vec<String> = (&pairs).into_iter().map(|(_, val)| {
-        format!("{:5}", val)
+    let changed_style = Style::new().white().on_blue().bold();
+    let cells: Vec<Span> = (&cols).into_iter().map(|(_, val, changed)| {
+        let text = format!("{:5}", val);
+        if *changed {
+            Span::styled(text, changed_style)
+        } else {
+            Span::raw(text)
+        }
     }).collect();
     let rows = [Row::new(cells)];
-    let widths: Vec<Constraint> = (&pairs).into_iter().map(|_| {
+    let widths: Vec<Constraint> = (&cols).into_iter().map(|_| {
         Constraint::Length(5)
     }).collect();
     let block = common_block(title);
-    let header_cells: Vec<String> = (&pairs).into_iter().map(|(name, _)| {
+    let header_cells: Vec<String> = (&cols).into_iter().map(|(name, _, _)| {
         format!("{:>5}", name)
     }).collect();
     let header = Row::new(header_cells)
