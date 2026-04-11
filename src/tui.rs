@@ -310,10 +310,11 @@ enum Region {
     /// because students care more about "where am I?" than "what
     /// kind of memory is this?".
     Current,
-    /// Stack contents: addresses from `sp + 2` (the most recently
-    /// pushed value) up to and including `RAM - 2` (the bottom of
-    /// memory, where the stack starts). Empty when nothing has been
-    /// pushed.
+    /// Stack contents: addresses from `sp + 2` (low byte of the
+    /// most recently pushed word) up to and including `RAM - 1`
+    /// (high byte of the bottom-of-stack word — `push` writes both
+    /// `sp` and `sp + 1`, so both bytes of every pushed word belong
+    /// to the stack region). Empty when nothing has been pushed.
     Stack,
     /// Loaded program bytes (`0..program.size()`).
     Program,
@@ -327,9 +328,9 @@ fn region_of(addr: usize, computer: &Computer) -> Region {
         return Region::Current;
     }
     let sp = computer.core.register_file.sp as usize;
-    // The stack lives at addresses (sp + 2)..=(RAM - 2). Empty when
-    // sp + 2 > RAM - 2, which is its initial state.
-    if addr >= sp + 2 && addr + 1 < RAM {
+    // The stack lives at addresses (sp + 2)..=(RAM - 1). Empty when
+    // sp + 2 > RAM - 1, which is its initial state (sp = RAM - 2).
+    if addr >= sp + 2 && addr < RAM {
         return Region::Stack;
     }
     if let Some(p) = &computer.program {
